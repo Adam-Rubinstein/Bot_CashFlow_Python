@@ -1,26 +1,31 @@
 import os
-import re
 from datetime import datetime
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
 # НАСТРОЙКИ
 TELEGRAM_TOKEN = "8510083126:AAEaI3eGQwaBgx8b9dx2iweHTIvrWRDCoiY"
 VAULT_PATH = "D:/Desktop/Obsidian/KnowledgeBase/Base/00_Spending"
 
-
 # Шаблон файла
-TEMPLATE = """## *Spending:*
+TEMPLATE = """### Расходы и доходы за {date}
 
-| Product | Source | Sum |
-| ------- | ------ | --- |
+ ### Tags: #Spending
+---
+## *Spending:*
+
+| Product |  Source   |   Sum    |
+| :-----: | :-------: | :------: |
 {spending_rows}
 
+---
 ## *Income:*
 
-| Product | Source | Sum |
-| ------- | ------ | --- |
+| Product |  Source   |   Sum    |
+| :-----: | :-------: | :------: |
 {income_rows}
+
+---
 """
 
 
@@ -36,7 +41,6 @@ def parse_message(text):
 
         product, source, amount_str = parts
 
-        # Проверяем на "+" для дохода
         is_income = amount_str.startswith('+')
         amount_str = amount_str.replace('+', '').replace(' ', '')
 
@@ -81,7 +85,6 @@ def read_file(file_path):
     spending = []
     income = []
 
-    # Парсим таблицы
     in_spending = False
     in_income = False
 
@@ -110,25 +113,32 @@ def read_file(file_path):
 
 def write_file(file_path, spending, income):
     """Записывает данные в файл"""
-    spending_rows = '\n'.join([f"| {s[0]} | {s[1]} | {s[2]} |" for s in spending])
-    income_rows = '\n'.join([f"| {i[0]} | {i[1]} | {i[2]} |" for i in income])
+    now = datetime.now()
+    date_str = now.strftime('%d.%m.%Y')
+
+    spending_rows = ""
+    for s in spending:
+        amount = str(s[2]).replace('.', ',')
+        spending_rows += f"| {s[0]} | {s[1]} | {amount} |\n"
+
+    income_rows = ""
+    for i in income:
+        amount = str(i[2]).replace('.', ',')
+        income_rows += f"| {i[0]} | {i[1]} | {amount} |\n"
+
+    if not spending_rows:
+        spending_rows = "| | | |\n"
+    if not income_rows:
+        income_rows = "| | | |\n"
 
     content = TEMPLATE.format(
-        spending_rows=spending_rows if spending_rows else "| | | |",
-        income_rows=income_rows if income_rows else "| | | |"
+        date=date_str,
+        spending_rows=spending_rows,
+        income_rows=income_rows
     )
 
     with open(file_path, 'w', encoding='utf-8') as f:
         f.write(content)
-
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Привет! Отправь траты/доходы в формате:\n\n"
-        "еда, лента, 350\n"
-        "зарплата, работа, +15000\n\n"
-        "Первое - расход, второе - доход"
-    )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -136,13 +146,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     entries = parse_message(text)
 
     if not entries:
-        await update.message.reply_text("Неверный формат! Пример:\nеда, лента, 350")
+        await update.message.reply_text("Invalid format! Example:\nfood, store, 350")
         return
 
     file_path = get_file_path()
     spending, income = read_file(file_path)
 
-    # Добавляем новые записи
     for entry in entries:
         row = [entry['product'], entry['source'], str(entry['amount'])]
         if entry['is_income']:
@@ -153,17 +162,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     write_file(file_path, spending, income)
 
     await update.message.reply_text(
-        f"Добавлено {len(entries)} записей в {os.path.basename(file_path)}"
+        f"Added {len(entries)} records to {os.path.basename(file_path)}"
     )
 
 
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("Бот запущен!")
+    print("Bot started!")
     app.run_polling()
 
 
