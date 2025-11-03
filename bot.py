@@ -1,0 +1,171 @@
+import os
+import re
+from datetime import datetime
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+
+# НАСТРОЙКИ
+TELEGRAM_TOKEN = "8510083126:AAEaI3eGQwaBgx8b9dx2iweHTIvrWRDCoiY"
+VAULT_PATH = "D:/Desktop/Obsidian/KnowledgeBase/Base/00_Spending"
+
+
+# Шаблон файла
+TEMPLATE = """## *Spending:*
+
+| Product | Source | Sum |
+| ------- | ------ | --- |
+{spending_rows}
+
+## *Income:*
+
+| Product | Source | Sum |
+| ------- | ------ | --- |
+{income_rows}
+"""
+
+
+def parse_message(text):
+    """Парсит сообщение в формат: товар, источник, сумма"""
+    lines = [line.strip() for line in text.strip().split('\n') if line.strip()]
+    entries = []
+
+    for line in lines:
+        parts = [p.strip() for p in line.split(',')]
+        if len(parts) != 3:
+            continue
+
+        product, source, amount_str = parts
+
+        # Проверяем на "+" для дохода
+        is_income = amount_str.startswith('+')
+        amount_str = amount_str.replace('+', '').replace(' ', '')
+
+        try:
+            amount = float(amount_str)
+            entries.append({
+                'product': product,
+                'source': source,
+                'amount': amount,
+                'is_income': is_income
+            })
+        except ValueError:
+            continue
+
+    return entries
+
+
+def get_file_path():
+    """Возвращает путь к файлу текущей даты"""
+    now = datetime.now()
+    year = now.strftime('%Y')
+    month_num = now.strftime('%m')
+    month_name = now.strftime('%B')
+    date_str = now.strftime('%d.%m.%Y')
+
+    month_folder = f"{month_num}_{month_name}"
+    folder_path = os.path.join(VAULT_PATH, year, month_folder)
+    file_path = os.path.join(folder_path, f"{date_str}.md")
+
+    os.makedirs(folder_path, exist_ok=True)
+    return file_path
+
+
+def read_file(file_path):
+    """Читает файл и возвращает списки расходов/доходов"""
+    if not os.path.exists(file_path):
+        return [], []
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    spending = []
+    income = []
+
+    # Парсим таблицы
+    in_spending = False
+    in_income = False
+
+    for line in content.split('\n'):
+        if '## *Spending:*' in line:
+            in_spending = True
+            in_income = False
+            continue
+        if '## *Income:*' in line:
+            in_spending = False
+            in_income = True
+            continue
+
+        if '|' not in line or 'Product' in line or '---' in line:
+            continue
+
+        cells = [c.strip() for c in line.split('|') if c.strip()]
+        if len(cells) >= 3:
+            if in_spending:
+                spending.append(cells)
+            elif in_income:
+                income.append(cells)
+
+    return spending, income
+
+
+def write_file(file_path, spending, income):
+    """Записывает данные в файл"""
+    spending_rows = '\n'.join([f"| {s[0]} | {s[1]} | {s[2]} |" for s in spending])
+    income_rows = '\n'.join([f"| {i[0]} | {i[1]} | {i[2]} |" for i in income])
+
+    content = TEMPLATE.format(
+        spending_rows=spending_rows if spending_rows else "| | | |",
+        income_rows=income_rows if income_rows else "| | | |"
+    )
+
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Привет! Отправь траты/доходы в формате:\n\n"
+        "еда, лента, 350\n"
+        "зарплата, работа, +15000\n\n"
+        "Первое — расход, второе (с +) — доход"
+    )
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    entries = parse_message(text)
+
+    if not entries:
+        await update.message.reply_text("Неверный формат! Пример:\nеда, лента, 350")
+        return
+
+    file_path = get_file_path()
+    spending, income = read_file(file_path)
+
+    # Добавляем новые записи
+    for entry in entries:
+        row = [entry['product'], entry['source'], str(entry['amount'])]
+        if entry['is_income']:
+            income.append(row)
+        else:
+            spending.append(row)
+
+    write_file(file_path, spending, income)
+
+    await update.message.reply_text(
+        f"Добавлено {len(entries)} записей в {os.path.basename(file_path)}"
+    )
+
+
+def main():
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    print("Бот запущен!")
+    app.run_polling()
+
+
+if __name__ == '__main__':
+    main()
