@@ -34,19 +34,22 @@ TEMPLATE = """### Расходы и доходы за {date}
 
 
 def parse_message(text):
-    """Парсит сообщение в формат: товар, источник, сумма"""
+    """Парсит сообщение в формат: товар; источник; сумма"""
     lines = [line.strip() for line in text.strip().split('\n') if line.strip()]
     entries = []
 
     for line in lines:
-        parts = [p.strip() for p in line.split(',')]
+        # Разбиваем по точке с запятой
+        parts = line.split(';')
         if len(parts) != 3:
             continue
 
-        product, source, amount_str = parts
+        product = parts[0].strip()
+        source = parts[1].strip()
+        amount_str = parts[2].strip()
 
         is_income = amount_str.startswith('+')
-        amount_str = amount_str.replace('+', '').replace(' ', '')
+        amount_str = amount_str.replace('+', '').replace(' ', '').replace(',', '.')
 
         try:
             amount = float(amount_str)
@@ -57,6 +60,7 @@ def parse_message(text):
                 'is_income': is_income
             })
         except ValueError:
+            print(f"Ошибка парсинга: {amount_str}")
             continue
 
     return entries
@@ -105,7 +109,7 @@ def read_file(file_path):
         if '|' not in line or 'Product' in line or '---' in line:
             continue
 
-        cells = [c.strip().replace(',', '.') for c in line.split('|') if c.strip()]
+        cells = [c.strip().replace(',', '.').replace(' ', '') for c in line.split('|') if c.strip()]
         if len(cells) >= 3:
             if in_spending:
                 spending.append(cells)
@@ -113,6 +117,29 @@ def read_file(file_path):
                 income.append(cells)
 
     return spending, income
+
+
+def format_amount(amount_float):
+    """Форматирует число с пробелом как разделитель тысяч"""
+    if amount_float == int(amount_float):
+        amount = str(int(amount_float))
+    else:
+        amount = str(amount_float).replace('.', ',')
+
+    # Добавляем пробел как разделитель тысяч
+    parts = amount.split(',')
+    integer_part = parts[0]
+
+    # Форматируем целую часть с пробелами
+    if len(integer_part) > 3:
+        formatted_int = ' '.join([integer_part[max(0, i - 3):i] for i in range(len(integer_part), 0, -3)][::-1])
+    else:
+        formatted_int = integer_part
+
+    if len(parts) > 1:
+        return formatted_int + ',' + parts[1]
+    else:
+        return formatted_int
 
 
 def write_file(file_path, spending, income):
@@ -123,19 +150,13 @@ def write_file(file_path, spending, income):
     spending_rows = ""
     for s in spending:
         amount_float = float(s[2])
-        if amount_float == int(amount_float):
-            amount = str(int(amount_float))
-        else:
-            amount = str(amount_float).replace('.', ',')
+        amount = format_amount(amount_float)
         spending_rows += f"| {s[0]} | {s[1]} | {amount} |\n"
 
     income_rows = ""
     for i in income:
         amount_float = float(i[2])
-        if amount_float == int(amount_float):
-            amount = str(int(amount_float))
-        else:
-            amount = str(amount_float).replace('.', ',')
+        amount = format_amount(amount_float)
         income_rows += f"| {i[0]} | {i[1]} | {amount} |\n"
 
     if not spending_rows:
@@ -155,10 +176,13 @@ def write_file(file_path, spending, income):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
+    print(f"Получено сообщение: {text}")
+
     entries = parse_message(text)
+    print(f"Распарсено entries: {entries}")
 
     if not entries:
-        await update.message.reply_text("Invalid format! Example:\nfood, store, 350")
+        await update.message.reply_text("Invalid format! Example:\nProduct; Source; Sum")
         return
 
     file_path = get_file_path()
