@@ -1,11 +1,15 @@
 import os
 from datetime import datetime
+from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
+# Загрузи переменные из .env
+load_dotenv()
+
 # НАСТРОЙКИ
-TELEGRAM_TOKEN = "8510083126:AAEaI3eGQwaBgx8b9dx2iweHTIvrWRDCoiY"
-VAULT_PATH = "D:/Desktop/Obsidian/KnowledgeBase/Base/00_Spending"
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+VAULT_PATH = os.getenv("VAULT_PATH")
 
 # Шаблон файла
 TEMPLATE = """### Расходы и доходы за {date}
@@ -101,7 +105,7 @@ def read_file(file_path):
         if '|' not in line or 'Product' in line or '---' in line:
             continue
 
-        cells = [c.strip() for c in line.split('|') if c.strip()]
+        cells = [c.strip().replace(',', '.') for c in line.split('|') if c.strip()]
         if len(cells) >= 3:
             if in_spending:
                 spending.append(cells)
@@ -118,12 +122,20 @@ def write_file(file_path, spending, income):
 
     spending_rows = ""
     for s in spending:
-        amount = str(s[2]).replace('.', ',')
+        amount_float = float(s[2])
+        if amount_float == int(amount_float):
+            amount = str(int(amount_float))
+        else:
+            amount = str(amount_float).replace('.', ',')
         spending_rows += f"| {s[0]} | {s[1]} | {amount} |\n"
 
     income_rows = ""
     for i in income:
-        amount = str(i[2]).replace('.', ',')
+        amount_float = float(i[2])
+        if amount_float == int(amount_float):
+            amount = str(int(amount_float))
+        else:
+            amount = str(amount_float).replace('.', ',')
         income_rows += f"| {i[0]} | {i[1]} | {amount} |\n"
 
     if not spending_rows:
