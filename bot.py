@@ -4,10 +4,10 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
-# Загрузи переменные из .env
+# Загрузка переменных из .env
 load_dotenv()
 
-# НАСТРОЙКИ
+# Настройки
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 VAULT_PATH = os.getenv("VAULT_PATH")
 
@@ -21,17 +21,14 @@ TEMPLATE = """### Расходы и доходы за {date}
 | Product |  Source   |   Sum    |
 | :-----: | :-------: | :------: |
 {spending_rows}
-
 ---
 ## *Income:*
 
 | Product |  Source   |   Sum    |
 | :-----: | :-------: | :------: |
 {income_rows}
-
 ---
 """
-
 
 def parse_message(text):
     """Парсит сообщение в формат: товар; источник; сумма"""
@@ -65,7 +62,6 @@ def parse_message(text):
 
     return entries
 
-
 def get_file_path():
     """Возвращает путь к файлу текущей даты"""
     now = datetime.now()
@@ -80,7 +76,6 @@ def get_file_path():
 
     os.makedirs(folder_path, exist_ok=True)
     return file_path
-
 
 def read_file(file_path):
     """Читает файл и возвращает списки расходов/доходов"""
@@ -118,7 +113,6 @@ def read_file(file_path):
 
     return spending, income
 
-
 def format_amount(amount_float):
     """Форматирует число с пробелом как разделитель тысяч"""
     if amount_float == int(amount_float):
@@ -140,7 +134,6 @@ def format_amount(amount_float):
         return formatted_int + ',' + parts[1]
     else:
         return formatted_int
-
 
 def write_file(file_path, spending, income):
     """Записывает данные в файл"""
@@ -173,7 +166,6 @@ def write_file(file_path, spending, income):
     with open(file_path, 'w', encoding='utf-8') as f:
         f.write(content)
 
-
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     print(f"Получено сообщение: {text}")
@@ -201,7 +193,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Added {len(entries)} records to {os.path.basename(file_path)}"
     )
 
-
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
@@ -209,7 +200,6 @@ def main():
 
     print("Bot started!")
     app.run_polling()
-
 
 if __name__ == '__main__':
     main()
