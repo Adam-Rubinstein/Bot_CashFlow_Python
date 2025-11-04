@@ -1,5 +1,27 @@
-.env
+# Batch файл автозапуска
+start_bot.bat
+
+# Python
 __pycache__/
 *.pyc
-.venv/
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
 venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Логи
+*.log
+bot_log.txt
+
+# Config файлы с токенами
+config.py
+.env
