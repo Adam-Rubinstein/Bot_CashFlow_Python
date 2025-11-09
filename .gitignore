@@ -1,5 +1,5 @@
 # Batch файл автозапуска
-start_bot.bat
+bot.bat
 
 # Python
 __pycache__/
