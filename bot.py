@@ -69,7 +69,6 @@ def get_file_path():
 
 
 def read_file(file_path):
-    """Читает файл и возвращает списки расходов/доходов с информацией о Woman"""
     if not os.path.exists(file_path):
         return [], [], False, False
 
@@ -93,14 +92,12 @@ def read_file(file_path):
             in_spending = False
             in_income = True
             continue
-
         # Пропускаем заголовки и разделители
         if '|' not in line or 'Product' in line or ':-' in line:
             continue
 
-        cells = [c.strip() for c in line.split('|') if c.strip()]
-
-        # Должно быть минимум 3 ячейки (Product, Source, Sum)
+        # ВАЖНО: Не удаляем пробелы внутри строки!
+        cells = [c.strip().replace(',', '.') for c in line.split('|') if c.strip()]
         if len(cells) >= 3:
             has_woman_col = len(cells) >= 4
 
