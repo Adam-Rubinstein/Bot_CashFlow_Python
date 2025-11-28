@@ -11,39 +11,27 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 VAULT_PATH = os.getenv("VAULT_PATH")
 
-# Шаблон файла
-TEMPLATE = """### Расходы и доходы за {date}
-
- ### Tags: #Spending
----
-## *Spending:*
-
-| Product |  Source   |   Sum    |
-| :-----: | :-------: | :------: |
-{spending_rows}
----
-## *Income:*
-
-| Product |  Source   |   Sum    |
-| :-----: | :-------: | :------: |
-{income_rows}
----
-"""
 
 def parse_message(text):
-    """Парсит сообщение в формат: товар; источник; сумма"""
+    """Парсит сообщение в формат: товар; источник; сумма[; +]"""
     lines = [line.strip() for line in text.strip().split('\n') if line.strip()]
     entries = []
 
     for line in lines:
         # Разбиваем по точке с запятой
-        parts = line.split(';')
-        if len(parts) != 3:
+        parts = [p.strip() for p in line.split(';')]
+
+        if len(parts) < 3:
             continue
 
         product = parts[0].strip()
         source = parts[1].strip()
         amount_str = parts[2].strip()
+        woman = False
+
+        # Проверяем, есть ли + в конце (4-й элемент)
+        if len(parts) >= 4 and parts[3].strip() == '+':
+            woman = True
 
         is_income = amount_str.startswith('+')
         amount_str = amount_str.replace('+', '').replace(' ', '').replace(',', '.')
@@ -54,13 +42,15 @@ def parse_message(text):
                 'product': product,
                 'source': source,
                 'amount': amount,
-                'is_income': is_income
+                'is_income': is_income,
+                'woman': woman
             })
         except ValueError:
             print(f"Ошибка парсинга: {amount_str}")
             continue
 
     return entries
+
 
 def get_file_path():
     """Возвращает путь к файлу текущей даты"""
@@ -77,16 +67,19 @@ def get_file_path():
     os.makedirs(folder_path, exist_ok=True)
     return file_path
 
+
 def read_file(file_path):
-    """Читает файл и возвращает списки расходов/доходов"""
+    """Читает файл и возвращает списки расходов/доходов с информацией о Woman"""
     if not os.path.exists(file_path):
-        return [], []
+        return [], [], False, False
 
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
     spending = []
     income = []
+    spending_has_woman = False
+    income_has_woman = False
 
     in_spending = False
     in_income = False
@@ -101,17 +94,27 @@ def read_file(file_path):
             in_income = True
             continue
 
-        if '|' not in line or 'Product' in line or '---' in line:
+        # Пропускаем заголовки и разделители
+        if '|' not in line or 'Product' in line or ':-' in line:
             continue
 
-        cells = [c.strip().replace(',', '.').replace(' ', '') for c in line.split('|') if c.strip()]
+        cells = [c.strip() for c in line.split('|') if c.strip()]
+
+        # Должно быть минимум 3 ячейки (Product, Source, Sum)
         if len(cells) >= 3:
+            has_woman_col = len(cells) >= 4
+
             if in_spending:
                 spending.append(cells)
+                if has_woman_col and cells[3].strip():
+                    spending_has_woman = True
             elif in_income:
                 income.append(cells)
+                if has_woman_col and cells[3].strip():
+                    income_has_woman = True
 
-    return spending, income
+    return spending, income, spending_has_woman, income_has_woman
+
 
 def format_amount(amount_float):
     """Форматирует число с пробелом как разделитель тысяч"""
@@ -135,36 +138,67 @@ def format_amount(amount_float):
     else:
         return formatted_int
 
-def write_file(file_path, spending, income):
+
+def build_table(rows, has_woman):
+    """Строит строки таблицы"""
+    table_rows = ""
+    for row in rows:
+        amount_float = float(row[2].replace(' ', '').replace(',', '.'))
+        amount = format_amount(amount_float)
+
+        if has_woman:
+            woman_val = row[3] if len(row) >= 4 else ""
+            table_rows += f"|   {row[0]}   |  {row[1]}  | {amount} |   {woman_val}   |\n"
+        else:
+            table_rows += f"|   {row[0]}   |  {row[1]}  | {amount} |\n"
+
+    if not table_rows:
+        if has_woman:
+            table_rows = "|   |   |   |   |\n"
+        else:
+            table_rows = "|   |   |   |\n"
+
+    return table_rows
+
+
+def write_file(file_path, spending, income, spending_has_woman, income_has_woman):
     """Записывает данные в файл"""
     now = datetime.now()
     date_str = now.strftime('%d.%m.%Y')
 
-    spending_rows = ""
-    for s in spending:
-        amount_float = float(s[2])
-        amount = format_amount(amount_float)
-        spending_rows += f"| {s[0]} | {s[1]} | {amount} |\n"
+    spending_rows = build_table(spending, spending_has_woman)
+    income_rows = build_table(income, income_has_woman)
 
-    income_rows = ""
-    for i in income:
-        amount_float = float(i[2])
-        amount = format_amount(amount_float)
-        income_rows += f"| {i[0]} | {i[1]} | {amount} |\n"
+    # Строим таблицы с правильными разделителями
+    if spending_has_woman:
+        spending_header = "| Product | Source |  Sum  | Woman |\n|:-------:|:------:|:-----:|:-----:|"
+    else:
+        spending_header = "| Product | Source |  Sum  |\n|:-------:|:------:|:-----:|"
 
-    if not spending_rows:
-        spending_rows = "| | | |\n"
-    if not income_rows:
-        income_rows = "| | | |\n"
+    if income_has_woman:
+        income_header = "| Product | Source | Sum | Woman |\n| :-----: | :----: | :-: | :-----: |"
+    else:
+        income_header = "| Product | Source | Sum |\n| :-----: | :----: | :-: |"
 
-    content = TEMPLATE.format(
-        date=date_str,
-        spending_rows=spending_rows,
-        income_rows=income_rows
-    )
+    content = f"""### Расходы и доходы за {date_str}
+
+ ### Tags: #Spending
+---
+## *Spending:*
+
+{spending_header}
+{spending_rows}
+---
+## *Income:*
+
+{income_header}
+{income_rows}
+---
+"""
 
     with open(file_path, 'w', encoding='utf-8') as f:
         f.write(content)
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -174,24 +208,35 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"Распарсено entries: {entries}")
 
     if not entries:
-        await update.message.reply_text("Invalid format! Example:\nProduct; Source; Sum")
+        await update.message.reply_text("Invalid format! Example:\nProduct; Source; Sum\nOR\nProduct; Source; Sum; +")
         return
 
     file_path = get_file_path()
-    spending, income = read_file(file_path)
+    spending, income, spending_has_woman, income_has_woman = read_file(file_path)
 
+    # Проверяем, есть ли новые записи с woman = True
     for entry in entries:
-        row = [entry['product'], entry['source'], str(entry['amount'])]
+        if entry['woman']:
+            if entry['is_income']:
+                income_has_woman = True
+            else:
+                spending_has_woman = True
+
+    # Добавляем новые записи
+    for entry in entries:
+        woman_val = "+" if entry['woman'] else ""
+        row = [entry['product'], entry['source'], str(entry['amount']), woman_val]
         if entry['is_income']:
             income.append(row)
         else:
             spending.append(row)
 
-    write_file(file_path, spending, income)
+    write_file(file_path, spending, income, spending_has_woman, income_has_woman)
 
     await update.message.reply_text(
         f"Added {len(entries)} records to {os.path.basename(file_path)}"
     )
+
 
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
@@ -200,6 +245,7 @@ def main():
 
     print("Bot started!")
     app.run_polling()
+
 
 if __name__ == '__main__':
     main()
