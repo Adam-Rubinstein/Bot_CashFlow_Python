@@ -1,6 +1,7 @@
 import logging
 import os
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -23,15 +24,35 @@ VAULT_PATH = os.getenv("VAULT_PATH")
 PROXY_URL = (os.getenv("PROXY_URL") or "").strip() or None
 
 
-def _user_zone() -> ZoneInfo:
+def _parse_utc_offset(raw: str) -> Optional[timezone]:
+    """Принимает вид UTC+3, UTC+03:30, UTC-5 (без DST)."""
+    m = re.match(r"^\s*UTC\s*([+-])(\d{1,2})(?::(\d{2}))?\s*$", raw, re.IGNORECASE)
+    if not m:
+        return None
+    sign = 1 if m.group(1) == "+" else -1
+    hours = int(m.group(2))
+    minutes = int(m.group(3) or 0)
+    if minutes >= 60 or hours > 14:
+        return None
+    return timezone(timedelta(hours=sign * hours, minutes=sign * minutes))
+
+
+def _default_zone() -> timezone:
+    return timezone(timedelta(hours=3))
+
+
+def _user_zone() -> tzinfo:
     raw = (os.getenv("USER_TIMEZONE") or "").strip()
     if not raw:
-        return ZoneInfo("Europe/Moscow")
+        return _default_zone()
+    parsed = _parse_utc_offset(raw)
+    if parsed is not None:
+        return parsed
     try:
         return ZoneInfo(raw)
     except Exception:
-        logging.warning("Invalid USER_TIMEZONE=%r, using Europe/Moscow", raw)
-        return ZoneInfo("Europe/Moscow")
+        logging.warning("Invalid USER_TIMEZONE=%r, using UTC+3", raw)
+        return _default_zone()
 
 
 USER_ZONE = _user_zone()
@@ -282,7 +303,7 @@ def main():
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    logging.info("USER_TIMEZONE=%s", os.getenv("USER_TIMEZONE") or "(default Europe/Moscow)")
+    logging.info("USER_TIMEZONE=%s", os.getenv("USER_TIMEZONE") or "(default UTC+3)")
     logging.info("Bot started!")
     app.run_polling()
 

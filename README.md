@@ -43,7 +43,7 @@ See [LICENSE](LICENSE) for details.
 
    - `TELEGRAM_TOKEN` — token from [@BotFather](https://t.me/BotFather).
    - `VAULT_PATH` — absolute path to the folder where Markdown files should be written (e.g. your Obsidian vault or a subfolder).
-   - `USER_TIMEZONE` — IANA timezone name (e.g. `Europe/Moscow`). Telegram sends message time in UTC; the bot converts it to this zone for the daily filename and note title. Use the **same** value on a VPS as on your PC so dates match your calendar. If unset or invalid, the bot falls back to `Europe/Moscow`.
+   - `USER_TIMEZONE` — easiest: fixed offset from UTC, e.g. `UTC+3`, `UTC+5`, `UTC-5`, or with minutes `UTC+03:30`. You can also use an IANA name such as `Europe/Moscow`. Telegram sends message time in UTC; the bot converts it for the daily filename and note title. Use the **same** value on a VPS as on your PC. If unset or invalid, the bot falls back to **`UTC+3`** (MSK offset, no DST).
    - `PROXY_URL` — **optional**. If Telegram is blocked or unstable on your network, set the same kind of proxy you use in Telegram Desktop (SOCKS5 or HTTP), e.g. `socks5://user:pass@host:1080`. Leave empty to connect directly.
 
 4. Run the bot:
@@ -76,7 +76,7 @@ If you host the bot on a server, set `VAULT_PATH` to an absolute path on that se
 
 Less common: **SMB/NFS** mount so the bot writes to a network path (only if latency and reliability are acceptable).
 
-On a VPS outside networks that block Telegram, you can often **omit `PROXY_URL`**; verify with `curl https://api.telegram.org` on the server. Set **`USER_TIMEZONE`** to the same IANA name you use on your PC so daily filenames match your local calendar. Run the bot with **systemd**, **Docker**, or **screen/tmux** as you prefer. Keep `.env` on the server private (file permissions, no commits).
+On a VPS outside networks that block Telegram, you can often **omit `PROXY_URL`**; verify with `curl https://api.telegram.org` on the server. Set **`USER_TIMEZONE`** to the same value as on your PC (e.g. `UTC+3`) so daily filenames match your calendar. Run the bot with **systemd**, **Docker**, or **screen/tmux** as you prefer. Keep `.env` on the server private (file permissions, no commits).
 
 ## License
 
