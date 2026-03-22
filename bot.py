@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 import re
@@ -22,6 +24,36 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 VAULT_PATH = os.getenv("VAULT_PATH")
 # Опционально: SOCKS5/HTTP-прокси для доступа к api.telegram.org (см. README)
 PROXY_URL = (os.getenv("PROXY_URL") or "").strip() or None
+
+
+def parse_allowed_user_ids(raw: Optional[str]) -> Optional[set[int]]:
+    """None — разрешены все; непустой set — только эти user id (Telegram int)."""
+    if raw is None or not str(raw).strip():
+        return None
+    out: set[int] = set()
+    for part in re.split(r"[\s,;]+", raw.strip()):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            out.add(int(part))
+        except ValueError:
+            logging.warning("ALLOWED_USER_IDS: пропуск нечислового фрагмента %r", part)
+    if not out:
+        logging.warning("ALLOWED_USER_IDS не содержит валидных id — бот никому не ответит")
+        return set()
+    return out
+
+
+ALLOWED_USER_IDS = parse_allowed_user_ids(os.getenv("ALLOWED_USER_IDS"))
+
+
+def user_may_use_bot(user_id: Optional[int], allowed: Optional[set[int]]) -> bool:
+    if allowed is None:
+        return True
+    if user_id is None:
+        return False
+    return user_id in allowed
 
 
 def _parse_utc_offset(raw: str) -> Optional[timezone]:
@@ -58,9 +90,8 @@ def _user_zone() -> tzinfo:
 USER_ZONE = _user_zone()
 
 
-def message_event_datetime(message: Optional[Message]) -> datetime:
-    """Время события в USER_ZONE: Telegram отдаёт date в UTC."""
-    tz = USER_ZONE
+def message_event_datetime(message: Optional[Message], tz: tzinfo) -> datetime:
+    """Время события в tz: Telegram отдаёт date в UTC."""
     if message is None or message.date is None:
         logging.warning("Message has no date, using current UTC time")
         return datetime.now(timezone.utc).astimezone(tz)
@@ -256,8 +287,13 @@ def write_file(file_path, spending, income, spending_has_woman, income_has_woman
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id if update.effective_user else None
+    if not user_may_use_bot(uid, ALLOWED_USER_IDS):
+        logging.warning("Отклонено сообщение от user_id=%s (не в ALLOWED_USER_IDS)", uid)
+        return
+
     text = update.message.text
-    event_dt = message_event_datetime(update.message)
+    event_dt = message_event_datetime(update.message, USER_ZONE)
     logging.info("Получено сообщение: %s (event date in USER_TIMEZONE: %s)", text, event_dt.date())
 
     entries = parse_message(text)
@@ -304,6 +340,10 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logging.info("USER_TIMEZONE=%s", os.getenv("USER_TIMEZONE") or "(default UTC+3)")
+    if ALLOWED_USER_IDS is None:
+        logging.info("ALLOWED_USER_IDS=(any user)")
+    else:
+        logging.info("ALLOWED_USER_IDS=%s", sorted(ALLOWED_USER_IDS))
     logging.info("Bot started!")
     app.run_polling()
 

@@ -44,6 +44,7 @@ See [LICENSE](LICENSE) for details.
    - `TELEGRAM_TOKEN` — token from [@BotFather](https://t.me/BotFather).
    - `VAULT_PATH` — absolute path to the folder where Markdown files should be written (e.g. your Obsidian vault or a subfolder).
    - `USER_TIMEZONE` — easiest: fixed offset from UTC, e.g. `UTC+3`, `UTC+5`, `UTC-5`, or with minutes `UTC+03:30`. You can also use an IANA name such as `Europe/Moscow`. Telegram sends message time in UTC; the bot converts it for the daily filename and note title. Use the **same** value on a VPS as on your PC. If unset or invalid, the bot falls back to **`UTC+3`** (MSK offset, no DST).
+   - `ALLOWED_USER_IDS` — **optional**. Comma/space/semicolon-separated Telegram user ids allowed to use the bot (e.g. `123456789` or `111,222`). If empty or unset, **any** user can send messages. If set, other users are ignored (no reply).
    - `PROXY_URL` — **optional**. If Telegram is blocked or unstable on your network, set the same kind of proxy you use in Telegram Desktop (SOCKS5 or HTTP), e.g. `socks5://user:pass@host:1080`. Leave empty to connect directly.
 
 4. Run the bot:
@@ -53,6 +54,12 @@ See [LICENSE](LICENSE) for details.
    ```
 
    **Windows (optional):** copy [bot.example.bat](bot.example.bat) to `bot.bat` and double-click it to start the bot in the background with `pythonw` from `.venv`. `bot.bat` is gitignored so you can keep a local launcher.
+
+5. Run tests (optional):
+
+   ```bash
+   pytest
+   ```
 
 ### Proxy note
 
