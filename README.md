@@ -57,6 +57,21 @@ See [LICENSE](LICENSE) for details.
 
 The Telegram app’s proxy settings apply only to that app. This Python process uses the network stack of your OS; to route the bot through a proxy you must set `PROXY_URL` in `.env`. For SOCKS5, `httpx[socks]` is included via `requirements.txt`.
 
+### Running on a VPS and using Obsidian on your PC
+
+The bot always writes under `VAULT_PATH` on **the machine where `bot.py` runs**. It does not push files to another computer by itself.
+
+If you host the bot on a server, set `VAULT_PATH` to an absolute path on that server (Linux example: `/home/you/vault-cashflow`). To get the same Markdown into a local Obsidian vault, use a **separate** sync or shared storage layer, for example:
+
+- **Syncthing** — pair a folder on the VPS with a folder inside your vault on the PC.
+- **Git** — commit/push from the server or use the [Obsidian Git](https://github.com/denolehov/obsidian-git) workflow with a remote both sides use.
+- **Cloud** (Dropbox, Google Drive, Nextcloud, etc.) — if the vault already lives in synced storage, install the same client on the VPS or point `VAULT_PATH` at a mounted/synced directory.
+- **`rsync` over SSH** or cron — workable but less convenient for a constantly edited vault.
+
+Less common: **SMB/NFS** mount so the bot writes to a network path (only if latency and reliability are acceptable).
+
+On a VPS outside networks that block Telegram, you can often **omit `PROXY_URL`**; verify with `curl https://api.telegram.org` on the server. Run the bot with **systemd**, **Docker**, or **screen/tmux** as you prefer. Keep `.env` on the server private (file permissions, no commits).
+
 ## License
 
 GNU Lesser General Public License v3.0 — see [LICENSE](LICENSE).
