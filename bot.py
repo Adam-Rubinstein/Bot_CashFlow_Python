@@ -1,8 +1,15 @@
+import logging
 import os
 from datetime import datetime
+
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
 
 # Загрузка переменных из .env
 load_dotenv()
@@ -10,6 +17,8 @@ load_dotenv()
 # Настройки
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 VAULT_PATH = os.getenv("VAULT_PATH")
+# Опционально: SOCKS5/HTTP-прокси для доступа к api.telegram.org (см. README)
+PROXY_URL = (os.getenv("PROXY_URL") or "").strip() or None
 
 
 def parse_message(text):
@@ -236,7 +245,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    builder = ApplicationBuilder().token(TELEGRAM_TOKEN)
+    if PROXY_URL:
+        builder = builder.proxy(PROXY_URL).get_updates_proxy(PROXY_URL)
+        logging.info("Using proxy for Bot API and getUpdates")
+    app = builder.build()
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
