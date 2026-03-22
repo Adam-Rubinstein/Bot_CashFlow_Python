@@ -43,6 +43,7 @@ See [LICENSE](LICENSE) for details.
 
    - `TELEGRAM_TOKEN` — token from [@BotFather](https://t.me/BotFather).
    - `VAULT_PATH` — absolute path to the folder where Markdown files should be written (e.g. your Obsidian vault or a subfolder).
+   - `USER_TIMEZONE` — IANA timezone name (e.g. `Europe/Moscow`). Telegram sends message time in UTC; the bot converts it to this zone for the daily filename and note title. Use the **same** value on a VPS as on your PC so dates match your calendar. If unset or invalid, the bot falls back to `Europe/Moscow`.
    - `PROXY_URL` — **optional**. If Telegram is blocked or unstable on your network, set the same kind of proxy you use in Telegram Desktop (SOCKS5 or HTTP), e.g. `socks5://user:pass@host:1080`. Leave empty to connect directly.
 
 4. Run the bot:
@@ -57,6 +58,11 @@ See [LICENSE](LICENSE) for details.
 
 The Telegram app’s proxy settings apply only to that app. This Python process uses the network stack of your OS; to route the bot through a proxy you must set `PROXY_URL` in `.env`. For SOCKS5, `httpx[socks]` is included via `requirements.txt`.
 
+### Message date, timezone, and offline backlog
+
+- Each write uses the **Telegram message send time** (UTC from the API), converted with **`USER_TIMEZONE`** — not the server’s local clock, so a VPS and your PC agree on the calendar day when you use the same `USER_TIMEZONE`.
+- While the bot is stopped, the Bot API only keeps a **limited** queue of pending updates (on the order of **24 hours**). Older messages are not delivered by the standard bot API; you cannot recover an arbitrary backlog beyond that.
+
 ### Running on a VPS and using Obsidian on your PC
 
 The bot always writes under `VAULT_PATH` on **the machine where `bot.py` runs**. It does not push files to another computer by itself.
@@ -70,7 +76,7 @@ If you host the bot on a server, set `VAULT_PATH` to an absolute path on that se
 
 Less common: **SMB/NFS** mount so the bot writes to a network path (only if latency and reliability are acceptable).
 
-On a VPS outside networks that block Telegram, you can often **omit `PROXY_URL`**; verify with `curl https://api.telegram.org` on the server. Run the bot with **systemd**, **Docker**, or **screen/tmux** as you prefer. Keep `.env` on the server private (file permissions, no commits).
+On a VPS outside networks that block Telegram, you can often **omit `PROXY_URL`**; verify with `curl https://api.telegram.org` on the server. Set **`USER_TIMEZONE`** to the same IANA name you use on your PC so daily filenames match your local calendar. Run the bot with **systemd**, **Docker**, or **screen/tmux** as you prefer. Keep `.env` on the server private (file permissions, no commits).
 
 ## License
 

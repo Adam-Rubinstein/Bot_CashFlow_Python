@@ -1,9 +1,11 @@
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Optional
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from telegram import Update
+from telegram import Message, Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
 logging.basicConfig(
@@ -19,6 +21,34 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 VAULT_PATH = os.getenv("VAULT_PATH")
 # Опционально: SOCKS5/HTTP-прокси для доступа к api.telegram.org (см. README)
 PROXY_URL = (os.getenv("PROXY_URL") or "").strip() or None
+
+
+def _user_zone() -> ZoneInfo:
+    raw = (os.getenv("USER_TIMEZONE") or "").strip()
+    if not raw:
+        return ZoneInfo("Europe/Moscow")
+    try:
+        return ZoneInfo(raw)
+    except Exception:
+        logging.warning("Invalid USER_TIMEZONE=%r, using Europe/Moscow", raw)
+        return ZoneInfo("Europe/Moscow")
+
+
+USER_ZONE = _user_zone()
+
+
+def message_event_datetime(message: Optional[Message]) -> datetime:
+    """Время события в USER_ZONE: Telegram отдаёт date в UTC."""
+    tz = USER_ZONE
+    if message is None or message.date is None:
+        logging.warning("Message has no date, using current UTC time")
+        return datetime.now(timezone.utc).astimezone(tz)
+    d = message.date
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    else:
+        d = d.astimezone(timezone.utc)
+    return d.astimezone(tz)
 
 
 def parse_message(text):
@@ -55,19 +85,18 @@ def parse_message(text):
                 'woman': woman
             })
         except ValueError:
-            print(f"Ошибка парсинга: {amount_str}")
+            logging.warning("Ошибка парсинга: %s", amount_str)
             continue
 
     return entries
 
 
-def get_file_path():
-    """Возвращает путь к файлу текущей даты"""
-    now = datetime.now()
-    year = now.strftime('%Y')
-    month_num = now.strftime('%m')
-    month_name = now.strftime('%B')
-    date_str = now.strftime('%d.%m.%Y')
+def get_file_path(for_date: datetime):
+    """Возвращает путь к файлу для календарной даты for_date (в USER_ZONE)."""
+    year = for_date.strftime('%Y')
+    month_num = for_date.strftime('%m')
+    month_name = for_date.strftime('%B')
+    date_str = for_date.strftime('%d.%m.%Y')
 
     month_folder = f"{month_num}_{month_name}"
     folder_path = os.path.join(VAULT_PATH, year, month_folder)
@@ -167,10 +196,9 @@ def build_table(rows, has_woman):
     return table_rows
 
 
-def write_file(file_path, spending, income, spending_has_woman, income_has_woman):
+def write_file(file_path, spending, income, spending_has_woman, income_has_woman, title_date: datetime):
     """Записывает данные в файл"""
-    now = datetime.now()
-    date_str = now.strftime('%d.%m.%Y')
+    date_str = title_date.strftime('%d.%m.%Y')
 
     spending_rows = build_table(spending, spending_has_woman)
     income_rows = build_table(income, income_has_woman)
@@ -208,16 +236,17 @@ def write_file(file_path, spending, income, spending_has_woman, income_has_woman
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    print(f"Получено сообщение: {text}")
+    event_dt = message_event_datetime(update.message)
+    logging.info("Получено сообщение: %s (event date in USER_TIMEZONE: %s)", text, event_dt.date())
 
     entries = parse_message(text)
-    print(f"Распарсено entries: {entries}")
+    logging.info("Распарсено entries: %s", entries)
 
     if not entries:
         await update.message.reply_text("Invalid format! Example:\nProduct; Source; Sum\nOR\nProduct; Source; Sum; +")
         return
 
-    file_path = get_file_path()
+    file_path = get_file_path(event_dt)
     spending, income, spending_has_woman, income_has_woman = read_file(file_path)
 
     # Проверяем, есть ли новые записи с woman = True
@@ -237,7 +266,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             spending.append(row)
 
-    write_file(file_path, spending, income, spending_has_woman, income_has_woman)
+    write_file(file_path, spending, income, spending_has_woman, income_has_woman, event_dt)
 
     await update.message.reply_text(
         f"Added {len(entries)} records to {os.path.basename(file_path)}"
@@ -253,7 +282,8 @@ def main():
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("Bot started!")
+    logging.info("USER_TIMEZONE=%s", os.getenv("USER_TIMEZONE") or "(default Europe/Moscow)")
+    logging.info("Bot started!")
     app.run_polling()
 
 
