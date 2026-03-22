@@ -51,6 +51,8 @@ See [LICENSE](LICENSE) for details.
    python bot.py
    ```
 
+   **Windows (optional):** copy [bot.example.bat](bot.example.bat) to `bot.bat` and double-click it to start the bot in the background with `pythonw` from `.venv`. `bot.bat` is gitignored so you can keep a local launcher.
+
 ### Proxy note
 
 The Telegram app’s proxy settings apply only to that app. This Python process uses the network stack of your OS; to route the bot through a proxy you must set `PROXY_URL` in `.env`. For SOCKS5, `httpx[socks]` is included via `requirements.txt`.
