@@ -1,27 +1,30 @@
 """bot_server.py — запускается на VPS.
-Получает сообщения от Telegram и пересылает распарсенные данные на ПК через bore-туннель.
+Получает сообщения от Telegram и пересылает распарсенные данные на ПК (туннель + HMAC).
 
 Запуск:
     python bot_server.py
 
 Переменные окружения (в .env на сервере):
     TELEGRAM_TOKEN    — токен бота
-    RECEIVER_URL      — адрес receiver.py на ПК, например http://bore.pub:54655
-    RECEIVER_SECRET   — общий секрет (должен совпадать с receiver.py)
+    RECEIVER_URL      — HTTPS предпочтительно (ngrok/cloudflared) или HTTP туннель
+    RECEIVER_SECRET   — общий секрет ≥24 символов (тот же, что на ПК в receiver)
     ALLOWED_USER_IDS  — список разрешённых user id (через запятую)
+    PROXY_URL         — опционально: SOCKS5/HTTP для Bot API
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
+import uuid
 from typing import Optional
 
 import httpx
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+
+from security import MIN_SECRET_LEN, SIGNATURE_HEADER, canonical_json_bytes, sign_body
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -33,6 +36,7 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 RECEIVER_URL = (os.getenv("RECEIVER_URL") or "").strip().rstrip("/")
 RECEIVER_SECRET = os.getenv("RECEIVER_SECRET", "")
+PROXY_URL = (os.getenv("PROXY_URL") or "").strip() or None
 
 
 def parse_allowed_user_ids(raw: Optional[str]) -> Optional[set[int]]:
@@ -114,15 +118,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     payload = {
         "entries": entries,
         "event_ts": event_ts,
+        "nonce": str(uuid.uuid4()),
     }
 
-    headers = {"Content-Type": "application/json"}
-    if RECEIVER_SECRET:
-        headers["X-Secret"] = RECEIVER_SECRET
+    body_bytes = canonical_json_bytes(payload)
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        SIGNATURE_HEADER: sign_body(RECEIVER_SECRET, body_bytes),
+    }
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(f"{RECEIVER_URL}/", content=json.dumps(payload), headers=headers)
+            resp = await client.post(f"{RECEIVER_URL}/", content=body_bytes, headers=headers)
             resp.raise_for_status()
             result = resp.json()
             await update.message.reply_text(
@@ -136,8 +143,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     if not RECEIVER_URL:
         raise RuntimeError("RECEIVER_URL не задан в .env")
+    if len(RECEIVER_SECRET) < MIN_SECRET_LEN:
+        raise RuntimeError(
+            f"RECEIVER_SECRET должен быть не короче {MIN_SECRET_LEN} символов "
+            "(общий ключ с receiver.py на ПК)."
+        )
 
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    builder = ApplicationBuilder().token(TELEGRAM_TOKEN)
+    if PROXY_URL:
+        builder = builder.proxy(PROXY_URL).get_updates_proxy(PROXY_URL)
+        logging.info("Using PROXY_URL for Bot API and getUpdates")
+    app = builder.build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logging.info("RECEIVER_URL=%s", RECEIVER_URL)

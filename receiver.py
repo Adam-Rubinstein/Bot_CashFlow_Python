@@ -1,21 +1,20 @@
-"""receiver.py — запускается на вашем ПК.
-Принимает данные от bot_server.py через bore-туннель и пишет .md файлы в Obsidian.
-
-Запуск:
-    python receiver.py
-"""
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import os
-from http.server import BaseHTTPRequestHandler, HTTPServer
-import json
+import time
 from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Optional
 from zoneinfo import ZoneInfo
 import re
 
+from fastapi import FastAPI, Request, Response
 from dotenv import load_dotenv
+import uvicorn
+
+from security import MIN_SECRET_LEN, SIGNATURE_HEADER, verify_signature
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -26,7 +25,20 @@ load_dotenv()
 
 VAULT_PATH = os.getenv("VAULT_PATH")
 RECEIVER_PORT = int(os.getenv("RECEIVER_PORT", "8080"))
+RECEIVER_HOST = (os.getenv("RECEIVER_HOST") or "127.0.0.1").strip()
 RECEIVER_SECRET = os.getenv("RECEIVER_SECRET", "")
+RECEIVER_INSECURE_DEV = (os.getenv("RECEIVER_INSECURE_DEV") or "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+RECEIVER_MAX_SKEW_SEC = float(os.getenv("RECEIVER_MAX_SKEW_SEC", "600"))
+RECEIVER_NONCE_TTL_SEC = float(os.getenv("RECEIVER_NONCE_TTL_SEC", "600"))
+
+app = FastAPI()
+
+_nonce_lock = asyncio.Lock()
+_seen_nonces: dict[str, float] = {}
 
 
 def _parse_utc_offset(raw: str) -> Optional[timezone]:
@@ -74,20 +86,15 @@ def read_file(file_path):
         return [], [], False, False
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
-    spending = []
-    income = []
-    spending_has_woman = False
-    income_has_woman = False
-    in_spending = False
-    in_income = False
+    spending, income = [], []
+    spending_has_woman = income_has_woman = False
+    in_spending = in_income = False
     for line in content.split('\n'):
         if '## *Spending:*' in line:
-            in_spending = True
-            in_income = False
+            in_spending, in_income = True, False
             continue
         if '## *Income:*' in line:
-            in_spending = False
-            in_income = True
+            in_spending, in_income = False, True
             continue
         if '|' not in line or 'Product' in line or ':-' in line:
             continue
@@ -113,7 +120,7 @@ def format_amount(amount_float):
     parts = amount.split(',')
     integer_part = parts[0]
     if len(integer_part) > 3:
-        formatted_int = ' '.join([integer_part[max(0, i - 3):i] for i in range(len(integer_part), 0, -3)][::-1])
+        formatted_int = ' '.join([integer_part[max(0, i-3):i] for i in range(len(integer_part), 0, -3)][::-1])
     else:
         formatted_int = integer_part
     if len(parts) > 1:
@@ -167,69 +174,97 @@ def write_file(file_path, spending, income, spending_has_woman, income_has_woman
         f.write(content)
 
 
-class RequestHandler(BaseHTTPRequestHandler):
-    def log_message(self, format, *args):
-        logging.info(format, *args)
+async def _nonce_ok(nonce: str) -> bool:
+    if not nonce or not isinstance(nonce, str) or len(nonce) < 8:
+        return False
+    now = time.time()
+    async with _nonce_lock:
+        dead = [k for k, exp in _seen_nonces.items() if exp < now]
+        for k in dead:
+            del _seen_nonces[k]
+        if nonce in _seen_nonces:
+            return False
+        _seen_nonces[nonce] = now + RECEIVER_NONCE_TTL_SEC
+        return True
 
-    def do_POST(self):
-        try:
-            if RECEIVER_SECRET:
-                token = self.headers.get("X-Secret", "")
-                if token != RECEIVER_SECRET:
-                    self.send_response(403)
-                    self.end_headers()
-                    self.wfile.write(b"Forbidden")
-                    logging.warning("Неверный секрет в запросе")
-                    return
 
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length)
-            data = json.loads(body)
+@app.post("/")
+async def handle(request: Request):
+    body = await request.body()
 
-            entries = data["entries"]
-            event_ts = data["event_ts"]
-            event_dt = datetime.fromtimestamp(event_ts, tz=timezone.utc).astimezone(USER_ZONE)
+    if not RECEIVER_INSECURE_DEV:
+        if len(RECEIVER_SECRET) < MIN_SECRET_LEN:
+            logging.error("RECEIVER_SECRET слишком короткий или не задан")
+            return Response(content="Forbidden", status_code=403)
+        sig = request.headers.get(SIGNATURE_HEADER)
+        if not verify_signature(RECEIVER_SECRET, body, sig):
+            logging.warning("Неверная подпись или отсутствует %s", SIGNATURE_HEADER)
+            return Response(content="Forbidden", status_code=403)
+    try:
+        data = json.loads(body.decode("utf-8"))
+        entries = data["entries"]
+        event_ts = data["event_ts"]
+        nonce = data.get("nonce")
+        if not RECEIVER_INSECURE_DEV:
+            if not await _nonce_ok(nonce):
+                logging.warning("Повтор nonce или невалидный nonce")
+                return Response(content="Forbidden", status_code=403)
+        now_ts = time.time()
+        if abs(float(event_ts) - now_ts) > RECEIVER_MAX_SKEW_SEC:
+            logging.warning(
+                "event_ts вне допустимого окна (skew > %s сек)", RECEIVER_MAX_SKEW_SEC
+            )
+            return Response(content="Forbidden", status_code=403)
 
-            file_path = get_file_path(event_dt)
-            spending, income, spending_has_woman, income_has_woman = read_file(file_path)
-
-            for entry in entries:
-                if entry['woman']:
-                    if entry['is_income']:
-                        income_has_woman = True
-                    else:
-                        spending_has_woman = True
-
-            for entry in entries:
-                woman_val = "+" if entry['woman'] else ""
-                row = [entry['product'], entry['source'], str(entry['amount']), woman_val]
+        event_dt = datetime.fromtimestamp(event_ts, tz=timezone.utc).astimezone(USER_ZONE)
+        file_path = get_file_path(event_dt)
+        spending, income, spending_has_woman, income_has_woman = read_file(file_path)
+        for entry in entries:
+            if entry['woman']:
                 if entry['is_income']:
-                    income.append(row)
+                    income_has_woman = True
                 else:
-                    spending.append(row)
+                    spending_has_woman = True
+        for entry in entries:
+            woman_val = "+" if entry['woman'] else ""
+            row = [entry['product'], entry['source'], str(entry['amount']), woman_val]
+            if entry['is_income']:
+                income.append(row)
+            else:
+                spending.append(row)
+        write_file(file_path, spending, income, spending_has_woman, income_has_woman, event_dt)
+        logging.info("Записано %d entries в %s", len(entries), file_path)
+        return {"ok": True, "file": os.path.basename(file_path), "count": len(entries)}
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        logging.warning("Некорректное тело запроса: %s", e)
+        return Response(content="Bad Request", status_code=400)
+    except Exception as e:
+        logging.exception("Ошибка обработки запроса")
+        return Response(content=str(e), status_code=500)
 
-            write_file(file_path, spending, income, spending_has_woman, income_has_woman, event_dt)
-            logging.info("Записано %d entries в %s", len(entries), file_path)
 
-            response = json.dumps({"ok": True, "file": os.path.basename(file_path), "count": len(entries)}).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(response)
-
-        except Exception as e:
-            logging.exception("Ошибка обработки запроса")
-            self.send_response(500)
-            self.end_headers()
-            self.wfile.write(str(e).encode())
-
-
-def main():
-    server = HTTPServer(("0.0.0.0", RECEIVER_PORT), RequestHandler)
-    logging.info("Receiver запущен на порту %d", RECEIVER_PORT)
-    logging.info("VAULT_PATH=%s", VAULT_PATH)
-    server.serve_forever()
+def _validate_startup() -> None:
+    if not VAULT_PATH:
+        raise SystemExit("VAULT_PATH не задан в .env")
+    if RECEIVER_INSECURE_DEV:
+        logging.warning(
+            "RECEIVER_INSECURE_DEV включён — без HMAC/nonce-политики; только для локальных тестов"
+        )
+        return
+    if len(RECEIVER_SECRET) < MIN_SECRET_LEN:
+        raise SystemExit(
+            f"Задайте RECEIVER_SECRET не короче {MIN_SECRET_LEN} символов "
+            f"(или RECEIVER_INSECURE_DEV=1 только для разработки)."
+        )
 
 
 if __name__ == '__main__':
-    main()
+    _validate_startup()
+    logging.info(
+        "Receiver: host=%s port=%s secure=%s",
+        RECEIVER_HOST,
+        RECEIVER_PORT,
+        not RECEIVER_INSECURE_DEV,
+    )
+    logging.info("VAULT_PATH=%s", VAULT_PATH)
+    uvicorn.run(app, host=RECEIVER_HOST, port=RECEIVER_PORT)

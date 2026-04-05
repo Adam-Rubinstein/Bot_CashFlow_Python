@@ -16,6 +16,7 @@ env/
 # IDE
 .vscode/
 .idea/
+.cursor/
 *.swp
 
 # Логи
@@ -25,3 +26,6 @@ bot_log.txt
 # Config файлы с токенами
 config.py
 .env
+
+# Локальные боевые данные (секреты для VPS/ПК, не коммитить)
+docs/REAL_DEPLOYMENT_DATA.local.md

@@ -2,6 +2,8 @@
 
 Telegram бот для отслеживания расходов и доходов с автоматическим сохранением в Markdown файлы.
 
+**Репозиторий:** [github.com/Adam-Rubinstein/Bot_CashFlow_Python](https://github.com/Adam-Rubinstein/Bot_CashFlow_Python)
+
 ## ⚠️ Warning
 
 **This project is licensed under LGPL v3.0**
@@ -14,6 +16,13 @@ This means:
 - ❌ You cannot make it proprietary
 
 See [LICENSE](LICENSE) for details.
+
+## Документация
+
+- **[docs/MemoryBank.md](docs/MemoryBank.md)** — контекст для разработки и агентов: архитектура, режимы (`bot.py` / `bot_server` + `receiver`), переменные окружения, деплой на VPS, журнал изменений.
+- **[deploy/README.md](deploy/README.md)** — установка и обновление `bot_server.py` на VPS (`62.60.186.183`), systemd `cashflow-bot-server`.
+- **[docs/TELEGRAM_BLOCKING_AND_PROXY.md](docs/TELEGRAM_BLOCKING_AND_PROXY.md)** — если Telegram / Bot API недоступны с ПК: почему MTProto из приложения не подходит для бота, split-режим (VPS + туннель + `receiver`), SOCKS5/VPN.
+- **[docs/RECEIVER_SECURITY.md](docs/RECEIVER_SECURITY.md)** — безопасность туннеля: HMAC, nonce, HTTPS, секрет, localhost.
 
 ## Features
 
@@ -70,9 +79,18 @@ The Telegram app’s proxy settings apply only to that app. This Python process 
 - Each write uses the **Telegram message send time** (UTC from the API), converted with **`USER_TIMEZONE`** — not the server’s local clock, so a VPS and your PC agree on the calendar day when you use the same `USER_TIMEZONE`.
 - While the bot is stopped, the Bot API only keeps a **limited** queue of pending updates (on the order of **24 hours**). Older messages are not delivered by the standard bot API; you cannot recover an arbitrary backlog beyond that.
 
+### Split setup: Telegram on a VPS, vault on your PC
+
+If the Telegram bot runs on a server but you want Markdown only on your computer:
+
+1. On the **PC**: set `VAULT_PATH`, `USER_TIMEZONE`, `RECEIVER_SECRET`, `RECEIVER_PORT` (optional), run `python receiver.py` (expose it to the internet, e.g. [bore](https://github.com/ekzhang/bore) tunnel — see `bot.example.bat`).
+2. On the **VPS**: set `TELEGRAM_TOKEN`, `RECEIVER_URL` (tunnel URL to the receiver), same `RECEIVER_SECRET`, optional `ALLOWED_USER_IDS`; run `python bot_server.py` (or install via systemd — [deploy/README.md](deploy/README.md)).
+
+Details: [docs/MemoryBank.md](docs/MemoryBank.md).
+
 ### Running on a VPS and using Obsidian on your PC
 
-The bot always writes under `VAULT_PATH` on **the machine where `bot.py` runs**. It does not push files to another computer by itself.
+The bot always writes under `VAULT_PATH` on **the machine where `bot.py` runs** (or where `receiver.py` runs in the split setup). It does not push files to another computer by itself.
 
 If you host the bot on a server, set `VAULT_PATH` to an absolute path on that server (Linux example: `/home/you/vault-cashflow`). To get the same Markdown into a local Obsidian vault, use a **separate** sync or shared storage layer, for example:
 

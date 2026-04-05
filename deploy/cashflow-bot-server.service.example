@@ -1,0 +1,16 @@
+[Unit]
+Description=Bot CashFlow — bot_server (Telegram → RECEIVER_URL)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/app/bot-cashflow
+EnvironmentFile=/opt/app/bot-cashflow/.env
+Environment="PATH=/opt/app/bot-cashflow/.venv/bin"
+ExecStart=/opt/app/bot-cashflow/.venv/bin/python bot_server.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
