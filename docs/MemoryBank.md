@@ -177,6 +177,8 @@ LGPL v3.0 — см. `LICENSE` в корне.
 ### 2026-04-07
 
 - Скрипт `start_split_tunnel.ps1`: для `ssh` используется `-WindowStyle Hidden`, чтобы не показывалось отдельное окно (случайное закрытие).
+- Добавлен [scripts/import_telegram_backlog.py](../scripts/import_telegram_backlog.py): импорт строк `[DD.MM.YYYY HH:MM] Adam: …` в vault по `USER_TIMEZONE`, слияние с уже существующими дневными `.md`.
+
 
 ### 2026-04-06
 
