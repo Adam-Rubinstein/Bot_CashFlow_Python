@@ -64,6 +64,29 @@ def row_key(row: list[str]) -> tuple:
     return tuple(c.strip() for c in row[:4]) if len(row) >= 4 else tuple(row)
 
 
+def parse_export_line(line: str) -> tuple[datetime, dict] | None:
+    """Одна строка экспорта Telegram → (время в USER_ZONE, первая запись parse_message)."""
+    m = LINE_RE.match(line.strip())
+    if not m:
+        return None
+    g = m.groupdict()
+    dt = datetime(
+        int(g["y"]),
+        int(g["m"]),
+        int(g["d"]),
+        int(g["H"]),
+        int(g["M"]),
+        tzinfo=USER_ZONE,
+    )
+    body = g["body"].strip()
+    entries = parse_message(body)
+    if not entries:
+        return None
+    if len(entries) > 1:
+        print(f"Несколько записей в одной строке, берём первую: {line[:60]}")
+    return dt, entries[0]
+
+
 def merge_section(
     existing: list[list[str]],
     timed_new: list[tuple[datetime, list[str]]],
@@ -88,27 +111,12 @@ def main() -> None:
         line = raw.strip()
         if not line:
             continue
-        m = LINE_RE.match(line)
-        if not m:
-            print(f"Пропуск (формат): {line[:80]}")
+        parsed = parse_export_line(line)
+        if not parsed:
+            print(f"Пропуск (формат или сумма): {line[:80]}")
             continue
-        g = m.groupdict()
-        dt = datetime(
-            int(g["y"]),
-            int(g["m"]),
-            int(g["d"]),
-            int(g["H"]),
-            int(g["M"]),
-            tzinfo=USER_ZONE,
-        )
-        body = g["body"].strip()
-        entries = parse_message(body)
-        if not entries:
-            print(f"Пропуск (парсинг суммы): {line[:80]}")
-            continue
-        if len(entries) > 1:
-            print(f"Несколько записей в одной строке, берём первую: {line[:60]}")
-        by_date[dt.date()].append((dt, entries[0]))
+        dt, entry = parsed
+        by_date[dt.date()].append((dt, entry))
 
     for d in sorted(by_date.keys()):
         timed = by_date[d]

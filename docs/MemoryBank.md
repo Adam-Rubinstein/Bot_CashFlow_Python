@@ -158,6 +158,7 @@ systemctl restart cashflow-bot-server
 - `pytest` из корня проекта.
 - `tests/test_bot_core.py` — парсинг, ACL, таймзона, формат сумм, `get_file_path`.
 - `tests/test_security.py`, `tests/test_receiver_security.py` — подпись и приёмник.
+- `tests/test_import_backlog.py` — разбор строк экспорта и импорт в vault.
 
 ## Лицензия
 
@@ -178,6 +179,7 @@ LGPL v3.0 — см. `LICENSE` в корне.
 
 - Скрипт `start_split_tunnel.ps1`: для `ssh` используется `-WindowStyle Hidden`, чтобы не показывалось отдельное окно (случайное закрытие).
 - Добавлен [scripts/import_telegram_backlog.py](../scripts/import_telegram_backlog.py): импорт строк `[DD.MM.YYYY HH:MM] Adam: …` в vault по `USER_TIMEZONE`, слияние с уже существующими дневными `.md`.
+- Тесты [tests/test_import_backlog.py](../tests/test_import_backlog.py); функция `parse_export_line`; ссылка в [README.md](../README.md).
 
 
 ### 2026-04-06
