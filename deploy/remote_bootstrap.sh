@@ -1,6 +1,6 @@
 #!/bin/bash
 # Однократный деплой на VPS (вызывается с ПК через ssh).
-set -euo pipefail
+set -eu
 REPO="/opt/app/bot-cashflow"
 mkdir -p "$REPO"
 cd "$REPO"
