@@ -139,6 +139,10 @@ systemctl restart cashflow-bot-server
 
 В проде для split-режима используется **long polling** на стороне `bot_server.py`; webhook на сервере не настроен.
 
+### Автоматизированный split (без bore/ngrok)
+
+На **VPS** `RECEIVER_URL=http://127.0.0.1:18080` — трафик идёт в **обратный SSH-туннель** с ПК: на сервере слушает `127.0.0.1:18080`, на ПК приёмник `receiver.py` на `127.0.0.1:8080`. На **Windows** скрипт [scripts/start_split_tunnel.ps1](../scripts/start_split_tunnel.ps1) поднимает `receiver` и `ssh -R 127.0.0.1:18080:127.0.0.1:8080 root@62.60.186.183`. Автозапуск при входе в Windows: ключ реестра `HKCU\...\Run` → `BotCashFlowSplitTunnel`. Деплой на VPS: [deploy/remote_bootstrap.sh](../deploy/remote_bootstrap.sh) и systemd `cashflow-bot-server`.
+
 ## Репозиторий: файлы и входные точки
 
 | Файл | Назначение |
@@ -172,6 +176,7 @@ LGPL v3.0 — см. `LICENSE` в корне.
 
 ### 2026-04-06
 
+- Развёрнуто на VPS `62.60.186.183`: `/opt/app/bot-cashflow`, systemd `cashflow-bot-server`, `.env` с `RECEIVER_URL=http://127.0.0.1:18080` (обратный SSH с ПК). На Windows: скрипт `scripts/start_split_tunnel.ps1`, автозапуск через `HKCU\...\Run\BotCashFlowSplitTunnel`. Код запушен в GitHub; VPS обновлён `git pull`.
 - Сгенерирован общий `RECEIVER_SECRET` (RNG), записан в корневой `.env` и в `docs/REAL_DEPLOYMENT_DATA.local.md` (в `.gitignore`); добавлен шаблон `docs/REAL_DEPLOYMENT_DATA.template.md`.
 - Реализована защита канала VPS → ПК: [security.py](../security.py) (HMAC-SHA256, канонический JSON), [receiver.py](../receiver.py) (подпись, nonce anti-replay, окно `event_ts`, привязка к `127.0.0.1` по умолчанию), [bot_server.py](../bot_server.py) (подпись тела, обязательный секрет ≥24 символов). Документация: [RECEIVER_SECURITY.md](./RECEIVER_SECURITY.md); обновлены [deploy/README.md](../deploy/README.md), [.env.example](../.env.example). Тесты: `tests/test_security.py`, `tests/test_receiver_security.py`.
 
