@@ -33,6 +33,7 @@ $sshArgs = @(
   "-R", "127.0.0.1:18080:127.0.0.1:8080",
   "root@62.60.186.183"
 )
-Start-Process -FilePath "ssh" -ArgumentList $sshArgs -WindowStyle Minimized
+# Hidden — без отдельного окна ssh (не закрыть случайно; процесс в фоне)
+Start-Process -FilePath "ssh" -ArgumentList $sshArgs -WindowStyle Hidden
 
-Write-Host "Receiver + SSH reverse tunnel started. Root: $Root"
+Write-Host "Receiver + SSH reverse tunnel started (no ssh window). Root: $Root"
