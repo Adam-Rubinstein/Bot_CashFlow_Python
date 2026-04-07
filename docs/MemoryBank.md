@@ -141,7 +141,13 @@ systemctl restart cashflow-bot-server
 
 ### Автоматизированный split (без bore/ngrok)
 
-На **VPS** `RECEIVER_URL=http://127.0.0.1:18080` — трафик идёт в **обратный SSH-туннель** с ПК: на сервере слушает `127.0.0.1:18080`, на ПК приёмник `receiver.py` на `127.0.0.1:8080`. На **Windows** скрипт [scripts/start_split_tunnel.ps1](../scripts/start_split_tunnel.ps1) поднимает `receiver` и `ssh -R …` в фоне (**без окна** `ssh.exe`, чтобы не закрыть случайно). Автозапуск при входе в Windows: ключ реестра `HKCU\...\Run` → `BotCashFlowSplitTunnel`. Деплой на VPS: [deploy/remote_bootstrap.sh](../deploy/remote_bootstrap.sh) и systemd `cashflow-bot-server`.
+На **VPS** `RECEIVER_URL=http://127.0.0.1:18080` — трафик идёт в **обратный SSH-туннель** с ПК: на сервере слушает `127.0.0.1:18080`, на ПК приёмник `receiver.py` на `127.0.0.1:8080`.
+
+На **Windows** скрипт [scripts/start_split_tunnel.ps1](../scripts/start_split_tunnel.ps1) поднимает `receiver` и `ssh -R …` в фоне. Режим по умолчанию (**ensure**): не перезапускает, если уже есть `receiver` и `ssh` с нужным пробросом **и** открыт TCP `127.0.0.1:8080`; иначе — полный рестарт. Параметр **`-Force`** — принудительный рестарт. Подробно, автозапуск, watchdog и типичные ошибки («Server disconnected…»): **[docs/WINDOWS_SSH_TUNNEL.md](./WINDOWS_SSH_TUNNEL.md)**.
+
+**Автозапуск и периодический подъём туннеля** реализованы в репозитории **TaskManager** (`scripts/windows_autostart/`: `install_autostart.ps1`, задача планировщика `TaskManager-CashFlow-Watchdog` каждые 2 мин через `WatchdogCashFlow.vbs`). Ранее упоминался ключ `HKCU\...\Run\BotCashFlowSplitTunnel` — актуальная схема описана в `WINDOWS_SSH_TUNNEL.md`.
+
+Деплой на VPS: [deploy/remote_bootstrap.sh](../deploy/remote_bootstrap.sh) и systemd `cashflow-bot-server`.
 
 ## Репозиторий: файлы и входные точки
 
@@ -170,6 +176,7 @@ LGPL v3.0 — см. `LICENSE` в корне.
 - [deploy/README.md](../deploy/README.md) — установка и обновление `bot_server.py` на VPS.
 - [TELEGRAM_BLOCKING_AND_PROXY.md](./TELEGRAM_BLOCKING_AND_PROXY.md) — блокировки, MTProto vs Bot API, split-режим.
 - [RECEIVER_SECURITY.md](./RECEIVER_SECURITY.md) — HMAC, nonce, HTTPS туннеля, `RECEIVER_HOST`.
+- [WINDOWS_SSH_TUNNEL.md](./WINDOWS_SSH_TUNNEL.md) — обратный SSH с Windows, `start_split_tunnel.ps1`, ensure/`-Force`, watchdog (TaskManager), диагностика «Ошибка связи с ПК».
 - `docs/REAL_DEPLOYMENT_DATA.local.md` — локальная копия с `RECEIVER_SECRET` для ПК и VPS (файл в `.gitignore`, в репозиторий не попадает). Шаблон: [REAL_DEPLOYMENT_DATA.template.md](./REAL_DEPLOYMENT_DATA.template.md).
 - Репозиторий на GitHub: [Adam-Rubinstein/Bot_CashFlow_Python](https://github.com/Adam-Rubinstein/Bot_CashFlow_Python).
 
@@ -180,6 +187,7 @@ LGPL v3.0 — см. `LICENSE` в корне.
 - Скрипт `start_split_tunnel.ps1`: для `ssh` используется `-WindowStyle Hidden`, чтобы не показывалось отдельное окно (случайное закрытие).
 - Добавлен [scripts/import_telegram_backlog.py](../scripts/import_telegram_backlog.py): импорт строк `[DD.MM.YYYY HH:MM] Adam: …` в vault по `USER_TIMEZONE`, слияние с уже существующими дневными `.md`.
 - Тесты [tests/test_import_backlog.py](../tests/test_import_backlog.py); функция `parse_export_line`; ссылка в [README.md](../README.md).
+- Документация обратного SSH с Windows: [docs/WINDOWS_SSH_TUNNEL.md](./WINDOWS_SSH_TUNNEL.md) (`start_split_tunnel.ps1`: ensure / `-Force`, проверка TCP `:8080`, связка с планировщиком TaskManager `TaskManager-CashFlow-Watchdog`, диагностика ошибки «Server disconnected…»). В [MemoryBank.md](./MemoryBank.md) обновлён раздел «Автоматизированный split»; устаревшая отсылка только к `HKCU\...\Run` заменена ссылкой на новый документ и TaskManager.
 
 
 ### 2026-04-06

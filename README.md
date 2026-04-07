@@ -23,6 +23,7 @@ See [LICENSE](LICENSE) for details.
 - **[deploy/README.md](deploy/README.md)** — установка и обновление `bot_server.py` на VPS (`62.60.186.183`), systemd `cashflow-bot-server`.
 - **[docs/TELEGRAM_BLOCKING_AND_PROXY.md](docs/TELEGRAM_BLOCKING_AND_PROXY.md)** — если Telegram / Bot API недоступны с ПК: почему MTProto из приложения не подходит для бота, split-режим (VPS + туннель + `receiver`), SOCKS5/VPN.
 - **[docs/RECEIVER_SECURITY.md](docs/RECEIVER_SECURITY.md)** — безопасность туннеля: HMAC, nonce, HTTPS, секрет, localhost.
+- **[docs/WINDOWS_SSH_TUNNEL.md](docs/WINDOWS_SSH_TUNNEL.md)** — обратный SSH с Windows (`start_split_tunnel.ps1`), автозапуск/watchdog через репозиторий TaskManager, типичные ошибки связи.
 - **[scripts/import_telegram_backlog.py](scripts/import_telegram_backlog.py)** — разовый импорт строк из экспорта Telegram в дневные `.md` (см. `BACKLOG` в файле).
 
 ## Features
@@ -87,7 +88,7 @@ If the Telegram bot runs on a server but you want Markdown only on your computer
 1. On the **PC**: set `VAULT_PATH`, `USER_TIMEZONE`, `RECEIVER_SECRET`, `RECEIVER_PORT` (optional), run `python receiver.py` (expose it to the internet, e.g. [bore](https://github.com/ekzhang/bore) tunnel — see `bot.example.bat`).
 2. On the **VPS**: set `TELEGRAM_TOKEN`, `RECEIVER_URL` (tunnel URL to the receiver), same `RECEIVER_SECRET`, optional `ALLOWED_USER_IDS`; run `python bot_server.py` (or install via systemd — [deploy/README.md](deploy/README.md)).
 
-Details: [docs/MemoryBank.md](docs/MemoryBank.md).
+Details: [docs/MemoryBank.md](docs/MemoryBank.md). Обратный SSH без bore (VPS `RECEIVER_URL=http://127.0.0.1:18080`): [docs/WINDOWS_SSH_TUNNEL.md](docs/WINDOWS_SSH_TUNNEL.md).
 
 ### Running on a VPS and using Obsidian on your PC
 

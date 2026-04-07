@@ -78,6 +78,16 @@ pip install -r requirements.txt
 systemctl restart cashflow-bot-server
 ```
 
+## Обратный SSH с ПК (без публичного URL / bore)
+
+Если `receiver.py` крутится на **вашем ПК** (Windows), а на VPS нужен доступ к `127.0.0.1` на стороне сервера, используйте в `.env` на VPS:
+
+```env
+RECEIVER_URL=http://127.0.0.1:18080
+```
+
+На ПК поднимается обратный туннель `ssh -R …` и процесс `receiver` — см. **[docs/WINDOWS_SSH_TUNNEL.md](../docs/WINDOWS_SSH_TUNNEL.md)** (`start_split_tunnel.ps1`, ensure/`-Force`, автозапуск через репозиторий TaskManager).
+
 ## Безопасность
 
 - Не коммитьте `.env` и токены.
