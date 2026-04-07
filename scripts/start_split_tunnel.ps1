@@ -8,7 +8,24 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 if (-not (Test-Path "$Root\receiver.py")) { $Root = "D:\Desktop\Projects\Bot_CashFlow_Python" }
 $Py = Join-Path $Root ".venv\Scripts\python.exe"
-if (-not (Test-Path $Py)) { throw "Нет venv: $Py" }
+if (-not (Test-Path $Py)) {
+    # Fallback: ищем py.exe лаунчер, затем системные Python — аналогично TaskManager/start_local_bot_services.ps1
+    $pyLauncher = "C:\Users\$env:USERNAME\AppData\Local\Programs\Python\Launcher\py.exe"
+    if (Test-Path $pyLauncher) {
+        $Py = $pyLauncher
+    } else {
+        $candidates = @(
+            "C:\Users\$env:USERNAME\AppData\Local\Programs\Python\Python313\python.exe",
+            "C:\Users\$env:USERNAME\AppData\Local\Programs\Python\Python312\python.exe",
+            "C:\Users\$env:USERNAME\AppData\Local\Programs\Python\Python311\python.exe",
+            "C:\Python313\python.exe", "C:\Python312\python.exe",
+            "C:\Program Files\Python313\python.exe"
+        )
+        $found = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+        if ($found) { $Py = $found } else { throw "Нет venv и не найден Python: $Root\.venv\Scripts\python.exe" }
+    }
+    Write-Host "venv not found, using fallback Python: $Py"
+}
 
 if (-not $Force) {
     $receiverOk = @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue | Where-Object {

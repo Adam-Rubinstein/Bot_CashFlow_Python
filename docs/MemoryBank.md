@@ -182,6 +182,10 @@ LGPL v3.0 — см. `LICENSE` в корне.
 
 ## Журнал
 
+### 2026-04-08
+
+- `scripts/start_split_tunnel.ps1`: добавлен fallback-поиск Python если `.venv` вдруг отсутствует (аналогично исправлению в TaskManager/`start_local_bot_services.ps1`). Порядок: `py.exe` лаунчер → системный `Python313/python.exe` → throw. Документация `docs/WINDOWS_SSH_TUNNEL.md` обновлена.
+
 ### 2026-04-07
 
 - Скрипт `start_split_tunnel.ps1`: для `ssh` используется `-WindowStyle Hidden`, чтобы не показывалось отдельное окно (случайное закрытие).

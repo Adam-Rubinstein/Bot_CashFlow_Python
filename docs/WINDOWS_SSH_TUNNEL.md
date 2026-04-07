@@ -12,7 +12,7 @@ RECEIVER_URL=http://127.0.0.1:18080
 
 Поднимает в фоне:
 
-1. **`receiver.py`** из venv проекта (`.venv\Scripts\python.exe`).
+1. **`receiver.py`** из venv проекта (`.venv\Scripts\python.exe`). Если venv отсутствует — автоматически ищет `py.exe`-лаунчер или системный `Python313/python.exe` (аналогично TaskManager). При полном отсутствии Python бросает исключение.
 2. **`ssh -R 127.0.0.1:18080:127.0.0.1:8080 root@<VPS>`** без отдельного окна (`-WindowStyle Hidden`).
 
 ### Параметры
