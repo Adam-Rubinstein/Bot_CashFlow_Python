@@ -1,0 +1,16 @@
+---
+description: Split-режим VPS→ПК: туннель, ошибка «Ошибка связи с ПК», watchdog
+alwaysApply: true
+---
+
+# Split-туннель (Bot CashFlow)
+
+## Симптом
+
+Пользователь видит в Telegram: **«Ошибка связи с ПК: All connection attempts failed»** — это **не** блокировка `api.telegram.org` на ПК. Это **обрыв обратного SSH** (`-R 127.0.0.1:18080:…`), из‑за чего на VPS недоступен `RECEIVER_URL` на localhost.
+
+## Обязательно для агента
+
+1. **Перед тем как править код бота** при такой ошибке: проверить туннель — см. [docs/WINDOWS_SSH_TUNNEL.md](docs/WINDOWS_SSH_TUNNEL.md) и [docs/TROUBLESHOOTING_SPLIT.md](docs/TROUBLESHOOTING_SPLIT.md). На ПК: `scripts\start_split_tunnel.ps1 -Force` или включить периодический [scripts/watch_split_tunnel.ps1](scripts/watch_split_tunnel.ps1).
+2. **После изменений** в `start_split_tunnel.ps1`, `watch_split_tunnel.ps1`, `bot_server`, `receiver`: обновить **WINDOWS_SSH_TUNNEL.md** / Memory Bank; не оставлять только ручной рестарт без watchdog.
+3. **Не путать** с MTProto / `PROXY_URL` для локального `bot.py` — другой сценарий ([TELEGRAM_BLOCKING_AND_PROXY.md](docs/TELEGRAM_BLOCKING_AND_PROXY.md)).
