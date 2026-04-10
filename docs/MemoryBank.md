@@ -143,7 +143,7 @@ systemctl restart cashflow-bot-server
 
 На **VPS** `RECEIVER_URL=http://127.0.0.1:18080` — трафик идёт в **обратный SSH-туннель** с ПК: на сервере слушает `127.0.0.1:18080`, на ПК приёмник `receiver.py` на `127.0.0.1:8080`.
 
-На **Windows** скрипт [scripts/start_split_tunnel.ps1](../scripts/start_split_tunnel.ps1) поднимает `receiver` и `ssh -R …` в фоне (ensure / `-Force`). **[scripts/watch_split_tunnel.ps1](../scripts/watch_split_tunnel.ps1)** проверяет локальный `:8080` и с VPS ответ **403** на POST в туннель; при сбое вызывает `start_split_tunnel.ps1 -Force`. Планировщик: задача **`BotCashFlowTunnelWatch`** каждые 5 мин (см. [WINDOWS_SSH_TUNNEL.md](./WINDOWS_SSH_TUNNEL.md)). Дополнительно возможен watchdog из репозитория **TaskManager** (`TaskManager-CashFlow-Watchdog`). Ошибка «Ошибка связи с ПК» / `All connection attempts failed`: [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md).
+На **Windows** скрипт [scripts/start_split_tunnel.ps1](../scripts/start_split_tunnel.ps1) поднимает `receiver` и `ssh -R …` в фоне (ensure / `-Force`). **[scripts/watch_split_tunnel.ps1](../scripts/watch_split_tunnel.ps1)** проверяет локальный `:8080` и с VPS ответ **403** на POST в туннель; при сбое вызывает `start_split_tunnel.ps1 -Force`. Планировщик: задача **`BotCashFlowTunnelWatch`** каждые 5 мин — желательно через [scripts/run_watch_tunnel_hidden.vbs](../scripts/run_watch_tunnel_hidden.vbs), чтобы не мигала консоль (см. [WINDOWS_SSH_TUNNEL.md](./WINDOWS_SSH_TUNNEL.md)). Дополнительно возможен watchdog из репозитория **TaskManager** (`TaskManager-CashFlow-Watchdog`). Ошибка «Ошибка связи с ПК» / `All connection attempts failed`: [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md).
 
 Деплой на VPS: [deploy/remote_bootstrap.sh](../deploy/remote_bootstrap.sh) и systemd `cashflow-bot-server`.
 
@@ -179,6 +179,10 @@ LGPL v3.0 — см. `LICENSE` в корне.
 - Репозиторий на GitHub: [Adam-Rubinstein/Bot_CashFlow_Python](https://github.com/Adam-Rubinstein/Bot_CashFlow_Python).
 
 ## Журнал
+
+### 2026-04-12
+
+- Устранено «моргание» консоли при периодическом watchdog: в [scripts/watch_split_tunnel.ps1](../scripts/watch_split_tunnel.ps1) вызов `ssh` переведён на `ProcessStartInfo` с `CreateNoWindow` (раньше `& ssh` поднимал `conhost`). Добавлен [scripts/run_watch_tunnel_hidden.vbs](../scripts/run_watch_tunnel_hidden.vbs) для задачи планировщика; обновлены [WINDOWS_SSH_TUNNEL.md](./WINDOWS_SSH_TUNNEL.md), [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md), правило [split-tunnel.mdc](../.cursor/rules/split-tunnel.mdc). Задача `BotCashFlowTunnelWatch` пересоздаётся с `/TR` `wscript.exe //B …\run_watch_tunnel_hidden.vbs` (путь без пробелов — см. документ; иначе осторожно с кавычками в `schtasks`).
 
 ### 2026-04-11
 

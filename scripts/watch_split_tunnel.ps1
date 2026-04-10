@@ -18,8 +18,25 @@ try {
 }
 
 if (-not $needRestart) {
-    # С VPS должен отвечать receiver (403 без подписи — норма)
-    $raw = & ssh -o BatchMode=yes -o ConnectTimeout=10 root@62.60.186.183 "curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18080/ -H 'Content-Type: application/json' -d '{}' 2>/dev/null"
+    # С VPS должен отвечать receiver (403 без подписи — норма).
+    # Не вызывать ssh через & ssh: на Windows это поднимает консоль/conhost и «моргает» раз в N минут из планировщика.
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = "ssh"
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.Arguments = '-o BatchMode=yes -o ConnectTimeout=10 root@62.60.186.183 "curl -s -o /dev/null -w ''%{http_code}'' -X POST http://127.0.0.1:18080/ -H ''Content-Type: application/json'' -d ''{}'' 2>/dev/null"'
+    $p = New-Object System.Diagnostics.Process
+    $p.StartInfo = $psi
+    try {
+        [void]$p.Start()
+        $raw = $p.StandardOutput.ReadToEnd()
+        $null = $p.StandardError.ReadToEnd()
+        $p.WaitForExit()
+    } finally {
+        if ($null -ne $p) { $p.Dispose() }
+    }
     $code = if ($raw) { "$raw".Trim() } else { "" }
     if ($code -ne "403") {
         $needRestart = $true

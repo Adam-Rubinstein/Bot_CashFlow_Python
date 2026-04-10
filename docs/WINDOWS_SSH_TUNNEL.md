@@ -75,11 +75,23 @@ cd D:\Desktop\Projects\Bot_CashFlow_Python
 
 Скрипт [scripts/watch_split_tunnel.ps1](../scripts/watch_split_tunnel.ps1): проверяет **локальный** `:8080` и с VPS **POST → 403**; при сбое вызывает `start_split_tunnel.ps1 -Force`.
 
-Планировщик (каждые 5 минут, от пользователя):
+Планировщик (каждые 5 минут, от пользователя). **Рекомендуется** запуск через VBS — окно не «моргает» даже при старте задачи:
 
 ```text
-schtasks /Create /F /TN "BotCashFlowTunnelWatch" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File D:\Desktop\Projects\Bot_CashFlow_Python\scripts\watch_split_tunnel.ps1" /SC MINUTE /MO 5 /RL LIMITED
+schtasks /Create /F /TN "BotCashFlowTunnelWatch" /TR "wscript.exe //B D:\Desktop\Projects\Bot_CashFlow_Python\scripts\run_watch_tunnel_hidden.vbs" /SC MINUTE /MO 5 /RL LIMITED
 ```
+
+Если путь к репозиторию содержит пробелы, возьмите `/TR` в кавычки и экранируйте внутренние кавычки под вашу оболочку (в PowerShell удобнее обернуть аргумент в одинарные кавычки целиком).
+
+Скрипт [scripts/run_watch_tunnel_hidden.vbs](../scripts/run_watch_tunnel_hidden.vbs) вызывает PowerShell с `-WindowStyle Hidden` и `WshShell.Run(..., 0, True)` (стиль окна 0 = скрытый, ожидание завершения).
+
+Альтернатива без VBS (если окно всё ещё мелькает — см. ниже):
+
+```text
+schtasks /Create /F /TN "BotCashFlowTunnelWatch" /TR "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File D:\Desktop\Projects\Bot_CashFlow_Python\scripts\watch_split_tunnel.ps1" /SC MINUTE /MO 5 /RL LIMITED
+```
+
+**«Моргает» консоль раз в 5 минут:** даже при `-WindowStyle Hidden` у задачи дочерний **`ssh.exe`**, вызванный из PowerShell как `& ssh ...`, получает консоль (`conhost`) и на секунду показывается окно. В [scripts/watch_split_tunnel.ps1](../scripts/watch_split_tunnel.ps1) проверка на VPS выполняется через `System.Diagnostics.ProcessStartInfo` с **`CreateNoWindow = $true`** и перенаправлением stdout — без отдельного окна. После обновления скрипта пересоздайте задачу при необходимости; при старом поведении дополнительно используйте строку с **`run_watch_tunnel_hidden.vbs`** выше.
 
 Краткая шпаргалка: [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md).
 

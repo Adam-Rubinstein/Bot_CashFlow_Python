@@ -7,3 +7,5 @@
 ```powershell
 .\scripts\start_split_tunnel.ps1 -Force
 ```
+
+Если **мигает чёрное окно** раз в несколько минут: это watchdog; в `watch_split_tunnel.ps1` вызов `ssh` без консоли + задача через `run_watch_tunnel_hidden.vbs` — см. [WINDOWS_SSH_TUNNEL.md](./WINDOWS_SSH_TUNNEL.md) (раздел про планировщик).
