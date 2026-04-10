@@ -143,9 +143,7 @@ systemctl restart cashflow-bot-server
 
 На **VPS** `RECEIVER_URL=http://127.0.0.1:18080` — трафик идёт в **обратный SSH-туннель** с ПК: на сервере слушает `127.0.0.1:18080`, на ПК приёмник `receiver.py` на `127.0.0.1:8080`.
 
-На **Windows** скрипт [scripts/start_split_tunnel.ps1](../scripts/start_split_tunnel.ps1) поднимает `receiver` и `ssh -R …` в фоне. Режим по умолчанию (**ensure**): не перезапускает, если уже есть `receiver` и `ssh` с нужным пробросом **и** открыт TCP `127.0.0.1:8080`; иначе — полный рестарт. Параметр **`-Force`** — принудительный рестарт. Подробно, автозапуск, watchdog и типичные ошибки («Server disconnected…»): **[docs/WINDOWS_SSH_TUNNEL.md](./WINDOWS_SSH_TUNNEL.md)**.
-
-**Автозапуск и периодический подъём туннеля** реализованы в репозитории **TaskManager** (`scripts/windows_autostart/`: `install_autostart.ps1`, задача планировщика `TaskManager-CashFlow-Watchdog` каждые 2 мин через `WatchdogCashFlow.vbs`). Ранее упоминался ключ `HKCU\...\Run\BotCashFlowSplitTunnel` — актуальная схема описана в `WINDOWS_SSH_TUNNEL.md`.
+На **Windows** скрипт [scripts/start_split_tunnel.ps1](../scripts/start_split_tunnel.ps1) поднимает `receiver` и `ssh -R …` в фоне (ensure / `-Force`). **[scripts/watch_split_tunnel.ps1](../scripts/watch_split_tunnel.ps1)** проверяет локальный `:8080` и с VPS ответ **403** на POST в туннель; при сбое вызывает `start_split_tunnel.ps1 -Force`. Планировщик: задача **`BotCashFlowTunnelWatch`** каждые 5 мин (см. [WINDOWS_SSH_TUNNEL.md](./WINDOWS_SSH_TUNNEL.md)). Дополнительно возможен watchdog из репозитория **TaskManager** (`TaskManager-CashFlow-Watchdog`). Ошибка «Ошибка связи с ПК» / `All connection attempts failed`: [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md).
 
 Деплой на VPS: [deploy/remote_bootstrap.sh](../deploy/remote_bootstrap.sh) и systemd `cashflow-bot-server`.
 
@@ -181,6 +179,10 @@ LGPL v3.0 — см. `LICENSE` в корне.
 - Репозиторий на GitHub: [Adam-Rubinstein/Bot_CashFlow_Python](https://github.com/Adam-Rubinstein/Bot_CashFlow_Python).
 
 ## Журнал
+
+### 2026-04-11
+
+- Ошибка «Ошибка связи с ПК: All connection attempts failed» — обрыв обратного SSH; добавлены [scripts/watch_split_tunnel.ps1](../scripts/watch_split_tunnel.ps1), задача планировщика `BotCashFlowTunnelWatch` (каждые 5 мин), обновлены [WINDOWS_SSH_TUNNEL.md](./WINDOWS_SSH_TUNNEL.md), [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md), правило [.cursor/rules/split-tunnel.mdc](../.cursor/rules/split-tunnel.mdc). Исправлены символы в комментариях `start_split_tunnel.ps1` (падение `-File`). Туннель перезапущен, проверка VPS → 403 OK.
 
 ### 2026-04-08
 

@@ -55,25 +55,37 @@ cd D:\Desktop\Projects\Bot_CashFlow_Python
 
 ## Устранение неполадок
 
-### В Telegram: «Ошибка связи с ПК: Server disconnected without sending a response»
+### В Telegram: «Ошибка связи с ПК: …» (`All connection attempts failed`, `Server disconnected…`)
 
-Источник — `httpx` на VPS: не дошёл ответ от `receiver` при POST на `RECEIVER_URL`.
+Источник — `httpx` на VPS: **нет TCP до** `RECEIVER_URL` или **нет ответа** от `receiver`. Чаще всего **упал обратный SSH** (на VPS `127.0.0.1:18080` не слушает).
 
-1. **ПК:** убедиться, что туннель поднят. Проверка вручную: `.\scripts\start_split_tunnel.ps1 -Force`.
-2. **VPS:** сервис бота активен: `systemctl status cashflow-bot-server`.
-3. **VPS:** до приёмника на ПК есть маршрут через туннель (порт 18080 на localhost):
+1. **ПК:** поднять туннель заново: `.\scripts\start_split_tunnel.ps1 -Force`.
+2. **VPS:** `systemctl status cashflow-bot-server`.
+3. **Проверка с VPS** (должен быть код **403** на POST без подписи — приёмник жив):
 
    ```bash
-   curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/
+   curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:18080/ -H "Content-Type: application/json" -d "{}"
    ```
 
-   Код **405** для GET к `POST /` — нормально (FastAPI отвечает, что метод не подходит); главное — не `000` / connection refused.
+   **`000`** или пусто — туннеля нет, с ПК снова запустить `start_split_tunnel.ps1`.
 
-4. Совпадение **`RECEIVER_SECRET`** в `.env` на VPS и в `.env` на ПК для `receiver.py` (и длина ≥ 24 символов).
+4. Совпадение **`RECEIVER_SECRET`** в `.env` на VPS и на ПК (≥ 24 символов).
+
+### Watchdog в этом репозитории
+
+Скрипт [scripts/watch_split_tunnel.ps1](../scripts/watch_split_tunnel.ps1): проверяет **локальный** `:8080` и с VPS **POST → 403**; при сбое вызывает `start_split_tunnel.ps1 -Force`.
+
+Планировщик (каждые 5 минут, от пользователя):
+
+```text
+schtasks /Create /F /TN "BotCashFlowTunnelWatch" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File D:\Desktop\Projects\Bot_CashFlow_Python\scripts\watch_split_tunnel.ps1" /SC MINUTE /MO 5 /RL LIMITED
+```
+
+Краткая шпаргалка: [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md).
 
 ### Туннель периодически отваливается
 
-Сеть, сон ПК, обрыв SSH — подключите **watchdog** (TaskManager) или ставьте в Планировщик задачу с периодическим вызовом `start_split_tunnel.ps1` без `-Force`.
+Сон ПК, сеть, обрыв SSH — используйте **watch** выше или аналог в **TaskManager** (`TaskManager-CashFlow-Watchdog`, см. ниже), либо периодический вызов `start_split_tunnel.ps1` **без** `-Force` (ensure).
 
 ## См. также
 

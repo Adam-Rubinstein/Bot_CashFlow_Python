@@ -1,7 +1,7 @@
 # Запуск receiver + обратный SSH-туннель на VPS (порт 18080 -> ПК:8080).
 # Требуется: ключ SSH к root@62.60.186.183 без пароля.
 param(
-    # Принудительно перезапустить (убить процессы и поднять заново). По умолчанию: если receiver и ssh уже есть — выход без рестарта (для watchdog).
+    # -Force: full restart. Default (ensure): skip if receiver+ssh+tunnel OK (for watchdog).
     [switch]$Force
 )
 $ErrorActionPreference = "Stop"
@@ -9,7 +9,7 @@ $Root = Split-Path -Parent $PSScriptRoot
 if (-not (Test-Path "$Root\receiver.py")) { $Root = "D:\Desktop\Projects\Bot_CashFlow_Python" }
 $Py = Join-Path $Root ".venv\Scripts\python.exe"
 if (-not (Test-Path $Py)) {
-    # Fallback: ищем py.exe лаунчер, затем системные Python — аналогично TaskManager/start_local_bot_services.ps1
+    # Fallback: py launcher or system Python (see TaskManager start_local_bot_services.ps1)
     $pyLauncher = "C:\Users\$env:USERNAME\AppData\Local\Programs\Python\Launcher\py.exe"
     if (Test-Path $pyLauncher) {
         $Py = $pyLauncher
@@ -44,7 +44,7 @@ if (-not $Force) {
             Write-Host "Receiver + SSH already running; port 8080 OK. Root: $Root"
             exit 0
         } catch {
-            Write-Host "Processes exist but port 8080 not accepting — will restart. ($($_.Exception.Message))"
+            Write-Host "Processes exist but port 8080 not accepting - will restart. ($($_.Exception.Message))"
         }
     }
 }
@@ -76,7 +76,7 @@ $sshArgs = @(
   "-R", "127.0.0.1:18080:127.0.0.1:8080",
   "root@62.60.186.183"
 )
-# Hidden — без отдельного окна ssh (не закрыть случайно; процесс в фоне)
+# Hidden: no separate ssh window
 Start-Process -FilePath "ssh" -ArgumentList $sshArgs -WindowStyle Hidden
 
 Write-Host "Receiver + SSH reverse tunnel started (no ssh window). Root: $Root"

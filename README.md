@@ -25,6 +25,7 @@ See [LICENSE](LICENSE) for details.
 - **[docs/RECEIVER_SECURITY.md](docs/RECEIVER_SECURITY.md)** — безопасность туннеля: HMAC, nonce, HTTPS, секрет, localhost.
 - **[docs/WINDOWS_SSH_TUNNEL.md](docs/WINDOWS_SSH_TUNNEL.md)** — обратный SSH с Windows (`start_split_tunnel.ps1`), автозапуск/watchdog через репозиторий TaskManager, типичные ошибки связи.
 - **[scripts/import_telegram_backlog.py](scripts/import_telegram_backlog.py)** — разовый импорт строк из экспорта Telegram в дневные `.md` (см. `BACKLOG` в файле).
+- **[docs/WINDOWS_SSH_TUNNEL.md](docs/WINDOWS_SSH_TUNNEL.md)** / **[docs/TROUBLESHOOTING_SPLIT.md](docs/TROUBLESHOOTING_SPLIT.md)** — split VPS→ПК: если в Telegram «Ошибка связи с ПК», `watch_split_tunnel.ps1`, планировщик.
 
 ## Features
 
