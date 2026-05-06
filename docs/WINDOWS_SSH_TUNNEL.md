@@ -37,7 +37,7 @@ cd D:\Desktop\Projects\Bot_CashFlow_Python
 .\scripts\start_split_tunnel.ps1 -Force
 ```
 
-Требуется **SSH-ключ к VPS без пароля** (тот же хост, что в скрипте: `root@62.60.186.183`).
+По умолчанию нужен **SSH-ключ к VPS без пароля** (тот же хост: `root@62.60.186.183`). Если ключа нет: задайте **`DEPLOY_SSH_PASSWORD`** в `.env` этого репозитория (или в переменной окружения) и установите **PuTTY**, чтобы в `PATH` был **`plink.exe`** — скрипт поднимет туннель через plink (штатный `ssh.exe` на Windows не принимает пароль неинтерактивно). В **`-batch`** plink не спросит ключ хоста: в скрипте задаётся **`-hostkey`** с отпечатком `SHA256:…` (формат PuTTY 4.19.3). При смене ключа на сервере задайте **`CASHFLOW_PLINK_HOSTKEY`** в окружении. У **plink нет** опции `-keepalive` как у OpenSSH — она не используется. Тот же пароль можно держать в `TaskManager/.env` для Obsidian bridge — там используется **paramiko** (см. `TaskManager/requirements.txt`).
 
 ## Автозапуск и watchdog на Windows
 
@@ -57,7 +57,7 @@ cd D:\Desktop\Projects\Bot_CashFlow_Python
 
 ### В Telegram: «Ошибка связи с ПК: …» (`All connection attempts failed`, `Server disconnected…`)
 
-Источник — `httpx` на VPS: **нет TCP до** `RECEIVER_URL` или **нет ответа** от `receiver`. Чаще всего **упал обратный SSH** (на VPS `127.0.0.1:18080` не слушает).
+Источник — `httpx` на VPS: **нет TCP до** `RECEIVER_URL`, **нет ответа** от `receiver`, либо **обрыв до конца HTTP** (текст вроде `Server disconnected without sending a response` — нестабильный канал / keep-alive через SSH). В `bot_server.py` для этого отключено переиспользование TCP к приёмнику и добавлены короткие повторы. Чаще всего при полном отказе **упал обратный SSH** (на VPS `127.0.0.1:18080` не слушает).
 
 1. **ПК:** поднять туннель заново: `.\scripts\start_split_tunnel.ps1 -Force`.
 2. **VPS:** `systemctl status cashflow-bot-server`.

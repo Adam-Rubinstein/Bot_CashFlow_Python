@@ -180,6 +180,12 @@ LGPL v3.0 — см. `LICENSE` в корне.
 
 ## Журнал
 
+### 2026-05-06
+
+- Поддержка **`DEPLOY_SSH_PASSWORD`**: `scripts/start_split_tunnel.ps1` и `scripts/watch_split_tunnel.ps1` читают пароль из `.env` или окружения; при его наличии туннель и проверка с ПК идут через **`plink.exe`** (PuTTY). Без пароля — по-прежнему OpenSSH и ключ. Обновлены `.env.example`, `docs/WINDOWS_SSH_TUNNEL.md`.
+- Исправление plink: **`Cannot confirm a host key in batch mode`** — в `start_split_tunnel.ps1` / `watch_split_tunnel.ps1` добавлен **`-hostkey`** с отпечатком `SHA256:…` (переменная **`CASHFLOW_PLINK_HOSTKEY`** при смене ключа на VPS). Удалён несуществующий у plink **`-keepalive`** (из‑за него процесс сразу завершался). Обновлён `docs/WINDOWS_SSH_TUNNEL.md`.
+- **`bot_server.py`:** при запросе к `RECEIVER_URL` — заголовок **`Connection: close`**, `httpx.Limits(max_keepalive_connections=0)`, таймаут connect/read до 15 с, до **3** попыток при `httpx.RequestError` с новым **`nonce`** (и новой подписью), без повтора при `HTTPStatusError`. См. «Server disconnected…» в `docs/WINDOWS_SSH_TUNNEL.md`.
+
 ### 2026-04-12
 
 - Устранено «моргание» консоли при периодическом watchdog: в [scripts/watch_split_tunnel.ps1](../scripts/watch_split_tunnel.ps1) вызов `ssh` переведён на `ProcessStartInfo` с `CreateNoWindow` (раньше `& ssh` поднимал `conhost`). Добавлен [scripts/run_watch_tunnel_hidden.vbs](../scripts/run_watch_tunnel_hidden.vbs) для задачи планировщика; обновлены [WINDOWS_SSH_TUNNEL.md](./WINDOWS_SSH_TUNNEL.md), [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md), правило [split-tunnel.mdc](../.cursor/rules/split-tunnel.mdc). Задача `BotCashFlowTunnelWatch` пересоздаётся с `/TR` `wscript.exe //B …\run_watch_tunnel_hidden.vbs` (путь без пробелов — см. документ; иначе осторожно с кавычками в `schtasks`).

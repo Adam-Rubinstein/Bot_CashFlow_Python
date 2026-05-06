@@ -13,6 +13,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -115,29 +116,49 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg_date = update.message.date
     event_ts = msg_date.timestamp()
 
-    payload = {
-        "entries": entries,
-        "event_ts": event_ts,
-        "nonce": str(uuid.uuid4()),
-    }
+    # Через обратный SSH keep-alive HTTP часто рвётся («Server disconnected without sending a response»):
+    # без переиспользования TCP (Limits + Connection: close) и коротких повторов с новым nonce.
+    limits = httpx.Limits(max_keepalive_connections=0)
+    timeout = httpx.Timeout(15.0, connect=10.0)
+    last_net_err: Optional[BaseException] = None
 
-    body_bytes = canonical_json_bytes(payload)
-    headers = {
-        "Content-Type": "application/json; charset=utf-8",
-        SIGNATURE_HEADER: sign_body(RECEIVER_SECRET, body_bytes),
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(f"{RECEIVER_URL}/", content=body_bytes, headers=headers)
-            resp.raise_for_status()
-            result = resp.json()
+    for attempt in range(3):
+        payload = {
+            "entries": entries,
+            "event_ts": event_ts,
+            "nonce": str(uuid.uuid4()),
+        }
+        body_bytes = canonical_json_bytes(payload)
+        headers = {
+            "Content-Type": "application/json; charset=utf-8",
+            SIGNATURE_HEADER: sign_body(RECEIVER_SECRET, body_bytes),
+            "Connection": "close",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=timeout, limits=limits) as client:
+                resp = await client.post(f"{RECEIVER_URL}/", content=body_bytes, headers=headers)
+                resp.raise_for_status()
+                result = resp.json()
             await update.message.reply_text(
                 f"Added {result['count']} records to {result['file']}"
             )
-    except Exception as e:
-        logging.exception("Ошибка отправки на receiver")
-        await update.message.reply_text(f"Ошибка связи с ПК: {e}")
+            return
+        except httpx.HTTPStatusError as e:
+            logging.exception("Ошибка отправки на receiver (HTTP)")
+            await update.message.reply_text(f"Ошибка связи с ПК: {e}")
+            return
+        except httpx.RequestError as e:
+            last_net_err = e
+            logging.warning("Попытка %s/3, сеть до receiver: %s", attempt + 1, e)
+            if attempt < 2:
+                await asyncio.sleep(0.4 * (attempt + 1))
+        except Exception as e:
+            logging.exception("Ошибка отправки на receiver")
+            await update.message.reply_text(f"Ошибка связи с ПК: {e}")
+            return
+
+    logging.exception("Ошибка отправки на receiver после повторов")
+    await update.message.reply_text(f"Ошибка связи с ПК: {last_net_err}")
 
 
 def main():
