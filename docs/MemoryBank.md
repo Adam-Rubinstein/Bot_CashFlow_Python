@@ -143,7 +143,7 @@ systemctl restart cashflow-bot-server
 
 На **VPS** `RECEIVER_URL=http://127.0.0.1:18080` — трафик идёт в **обратный SSH-туннель** с ПК: на сервере слушает `127.0.0.1:18080`, на ПК приёмник `receiver.py` на `127.0.0.1:8080`.
 
-На **Windows** скрипт [scripts/start_split_tunnel.ps1](../scripts/start_split_tunnel.ps1) поднимает `receiver` и `ssh -R …` в фоне (ensure / `-Force`). **[scripts/watch_split_tunnel.ps1](../scripts/watch_split_tunnel.ps1)** проверяет локальный `:8080` и с VPS ответ **403** на POST в туннель; при сбое вызывает `start_split_tunnel.ps1 -Force`. Планировщик: задача **`BotCashFlowTunnelWatch`** каждые 5 мин — желательно через [scripts/run_watch_tunnel_hidden.vbs](../scripts/run_watch_tunnel_hidden.vbs), чтобы не мигала консоль (см. [WINDOWS_SSH_TUNNEL.md](./WINDOWS_SSH_TUNNEL.md)). Дополнительно возможен watchdog из репозитория **TaskManager** (`TaskManager-CashFlow-Watchdog`). Ошибка «Ошибка связи с ПК» / `All connection attempts failed`: [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md).
+На **Windows** скрипт [scripts/start_split_tunnel.ps1](../scripts/start_split_tunnel.ps1) поднимает `receiver` и `ssh -R …` или **plink** (пароль + `-hostkey`) в фоне (ensure / `-Force`). **[scripts/watch_split_tunnel.ps1](../scripts/watch_split_tunnel.ps1)** проверяет локальный `:8080` и с VPS ответ **403** на POST в туннель; при сбое вызывает `start_split_tunnel.ps1 -Force`. Планировщик: задача **`BotCashFlowTunnelWatch`** каждые 5 мин — желательно через [scripts/run_watch_tunnel_hidden.vbs](../scripts/run_watch_tunnel_hidden.vbs), чтобы не мигала консоль (см. [WINDOWS_SSH_TUNNEL.md](./WINDOWS_SSH_TUNNEL.md)). Дополнительно возможен watchdog из репозитория **TaskManager** (`TaskManager-CashFlow-Watchdog`). Разбор ошибок «Ошибка связи с ПК» и **чеклист, чтобы не повторить регрессии**: [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md).
 
 Деплой на VPS: [deploy/remote_bootstrap.sh](../deploy/remote_bootstrap.sh) и systemd `cashflow-bot-server`.
 
@@ -186,6 +186,16 @@ LGPL v3.0 — см. `LICENSE` в корне.
 - Исправление plink: **`Cannot confirm a host key in batch mode`** — в `start_split_tunnel.ps1` / `watch_split_tunnel.ps1` добавлен **`-hostkey`** с отпечатком `SHA256:…` (переменная **`CASHFLOW_PLINK_HOSTKEY`** при смене ключа на VPS). Удалён несуществующий у plink **`-keepalive`** (из‑за него процесс сразу завершался). Обновлён `docs/WINDOWS_SSH_TUNNEL.md`.
 - **`bot_server.py`:** при запросе к `RECEIVER_URL` — заголовок **`Connection: close`**, `httpx.Limits(max_keepalive_connections=0)`, таймаут connect/read до 15 с, до **3** попыток при `httpx.RequestError` с новым **`nonce`** (и новой подписью), без повтора при `HTTPStatusError`. См. «Server disconnected…» в `docs/WINDOWS_SSH_TUNNEL.md`.
 - Деплой на VPS `62.60.186.183`: `git push dev master`, затем по SSH `git pull` в `/opt/app/bot-cashflow`, `pip install -r requirements.txt`, `systemctl restart cashflow-bot-server` — сервис `active`.
+
+**Чтобы больше не ловить те же сбои (краткий конспект для агента и человека):**
+
+| Симптом в Telegram | Типичная причина | Что уже зафиксировано в репозитории |
+|--------------------|------------------|-------------------------------------|
+| `All connection attempts failed` | Нет туннеля: на VPS не слушает `127.0.0.1:18080` (упал **ssh/plink**, не запущен **receiver**, порт **8080** мёртв) | Watchdog `watch_split_tunnel` / TaskManager; **plink**: обязательны **`-hostkey`** в `-batch` и **без** ложного **`-keepalive`** (у PuTTY его нет — процесс выходил сразу). |
+| `Server disconnected without sending a response` | TCP к приёмнику есть, но HTTP обрывается (нестабильный проброс, **keep-alive** через SSH) | В **`bot_server.py`**: нет переиспользования keep-alive к `RECEIVER_URL`, **повторы** сетевых ошибок с новым **nonce**. После правок **`bot_server.py`** — **деплой на VPS** (`git pull` + `systemctl restart cashflow-bot-server`). |
+| Пароль SSH, bridge TaskManager | Нет ключа: **plink** на ПК для туннеля; **paramiko** в `TaskManager` для `obsidian_remote_sync_bridge` | `DEPLOY_SSH_PASSWORD` в `.env`; `paramiko` в `TaskManager/requirements.txt`; не путать с блокировкой **Bot API** (см. `TELEGRAM_BLOCKING_AND_PROXY.md`). |
+
+Детальная шпаргалка: [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md).
 
 ### 2026-04-12
 

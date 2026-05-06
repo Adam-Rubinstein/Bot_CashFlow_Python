@@ -57,7 +57,7 @@ cd D:\Desktop\Projects\Bot_CashFlow_Python
 
 ### В Telegram: «Ошибка связи с ПК: …» (`All connection attempts failed`, `Server disconnected…`)
 
-Источник — `httpx` на VPS: **нет TCP до** `RECEIVER_URL`, **нет ответа** от `receiver`, либо **обрыв до конца HTTP** (текст вроде `Server disconnected without sending a response` — нестабильный канал / keep-alive через SSH). В `bot_server.py` для этого отключено переиспользование TCP к приёмнику и добавлены короткие повторы. Чаще всего при полном отказе **упал обратный SSH** (на VPS `127.0.0.1:18080` не слушает).
+Источник — `httpx` на VPS: **нет TCP до** `RECEIVER_URL`, **нет ответа** от `receiver`, либо **обрыв до конца HTTP** (текст вроде `Server disconnected without sending a response` — нестабильный канал / keep-alive через SSH). В `bot_server.py` для этого отключено переиспользование TCP к приёмнику и добавлены короткие повторы. Чаще всего при полном отказе **упал обратный SSH** (на VPS `127.0.0.1:18080` не слушает). **Конспект уже исправленных ловушек** (plink `-hostkey`, без ложного `-keepalive`, деплой после правок `bot_server`): [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md).
 
 1. **ПК:** поднять туннель заново: `.\scripts\start_split_tunnel.ps1 -Force`.
 2. **VPS:** `systemctl status cashflow-bot-server`.

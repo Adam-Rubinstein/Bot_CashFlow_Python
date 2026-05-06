@@ -5,13 +5,17 @@ alwaysApply: true
 
 # Split-туннель (Bot CashFlow)
 
-## Симптом
+## Симптомы (всё это split VPS→ПК, не блокировка Bot API на ПК)
 
-Пользователь видит в Telegram: **«Ошибка связи с ПК: All connection attempts failed»** — это **не** блокировка `api.telegram.org` на ПК. Это **обрыв обратного SSH** (`-R 127.0.0.1:18080:…`), из‑за чего на VPS недоступен `RECEIVER_URL` на localhost.
+- **«Ошибка связи с ПК: All connection attempts failed»** — чаще всего **нет TCP** до `RECEIVER_URL` на VPS: упал обратный **SSH/plink** (`-R 127.0.0.1:18080:…`) или не слушает **receiver** на ПК `:8080`.
+- **«… Server disconnected without sending a response»** — соединение есть, но **HTTP обрывается** по туннелю; см. правки **`bot_server.py`** (без keep-alive к приёмнику, повторы) и **деплой на VPS** после смены кода.
+
+**Регрессии, которые уже чинили:** plink в **`-batch`** без **`-hostkey`** (ключ не в кэше PuTTY); у plink **нельзя** подставлять **`-keepalive`** как у OpenSSH — процесс падает. Конспект: [docs/TROUBLESHOOTING_SPLIT.md](docs/TROUBLESHOOTING_SPLIT.md) (раздел «Что уже чинили»).
 
 ## Обязательно для агента
 
-1. **Перед тем как править код бота** при такой ошибке: проверить туннель — см. [docs/WINDOWS_SSH_TUNNEL.md](docs/WINDOWS_SSH_TUNNEL.md) и [docs/TROUBLESHOOTING_SPLIT.md](docs/TROUBLESHOOTING_SPLIT.md). На ПК: `scripts\start_split_tunnel.ps1 -Force` или включить периодический [scripts/watch_split_tunnel.ps1](scripts/watch_split_tunnel.ps1).
+1. **Перед правками кода бота** при таких ошибках: проверить туннель — [docs/WINDOWS_SSH_TUNNEL.md](docs/WINDOWS_SSH_TUNNEL.md), [docs/TROUBLESHOOTING_SPLIT.md](docs/TROUBLESHOOTING_SPLIT.md). На ПК: `scripts\start_split_tunnel.ps1 -Force` или [scripts/watch_split_tunnel.ps1](scripts/watch_split_tunnel.ps1) / планировщик.
 2. **После изменений** в `start_split_tunnel.ps1`, `watch_split_tunnel.ps1`, `bot_server`, `receiver`: обновить **WINDOWS_SSH_TUNNEL.md** / Memory Bank; не оставлять только ручной рестарт без watchdog.
-3. **Не путать** с MTProto / `PROXY_URL` для локального `bot.py` — другой сценарий ([TELEGRAM_BLOCKING_AND_PROXY.md](docs/TELEGRAM_BLOCKING_AND_PROXY.md)).
-4. **Watchdog на Windows — без «моргания» консоли:** не вызывать `ssh` из PowerShell как `& ssh` (поднимается `conhost`). Проверка в `watch_split_tunnel.ps1` — через `ProcessStartInfo` + `CreateNoWindow`; задача планировщика — предпочтительно `wscript //B` → [scripts/run_watch_tunnel_hidden.vbs](scripts/run_watch_tunnel_hidden.vbs). Подробно: [docs/WINDOWS_SSH_TUNNEL.md](docs/WINDOWS_SSH_TUNNEL.md).
+3. **После изменений `bot_server.py`:** задеплоить на VPS (`git pull` в `/opt/app/bot-cashflow`, `systemctl restart cashflow-bot-server`), иначе пользователь не получит фиксы httpx/повторов.
+4. **Не путать** с MTProto / `PROXY_URL` для локального `bot.py` — другой сценарий ([TELEGRAM_BLOCKING_AND_PROXY.md](docs/TELEGRAM_BLOCKING_AND_PROXY.md)).
+5. **Watchdog на Windows — без «моргания» консоли:** не вызывать `ssh` из PowerShell как `& ssh` (поднимается `conhost`). Проверка в `watch_split_tunnel.ps1` — через `ProcessStartInfo` + `CreateNoWindow`; задача планировщика — предпочтительно `wscript //B` → [scripts/run_watch_tunnel_hidden.vbs](scripts/run_watch_tunnel_hidden.vbs). Подробно: [docs/WINDOWS_SSH_TUNNEL.md](docs/WINDOWS_SSH_TUNNEL.md).
