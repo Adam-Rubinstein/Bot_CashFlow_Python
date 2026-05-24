@@ -180,11 +180,18 @@ LGPL v3.0 — см. `LICENSE` в корне.
 
 ## Журнал
 
+### 2026-05-24
+
+- **`bot_server.py`:** при сетевых сбоях до `RECEIVER_URL` — **8** попыток с экспоненциальной паузой **2, 4, 8, 16, 32, 64, 128 с**; пользователю ошибка «Ошибка связи с ПК» только после исчерпания повторов (~4 мин). Тесты `tests/test_bot_server_split.py`. **Нужен деплой на VPS** (`git pull` + `systemctl restart cashflow-bot-server`).
+
 ### 2026-05-06
 
+- Укреплён split-recovery: вынесена общая timeout-safe проверка в `scripts/split_tunnel_health.ps1`; `start_split_tunnel.ps1`, `watch_split_tunnel.ps1` и `keep_split_tunnel_alive.ps1` теперь опираются на реальный `403` с VPS, а не только на наличие процесса. Guardian `BotCashFlowTunnelGuardian` остался постоянным, но теперь сам делает probe и не может зависнуть на remote-check.
+- Добавлен постоянный guardian для split-канала: `scripts/keep_split_tunnel_alive.ps1` в бесконечном цикле перепроверяет туннель, `scripts/run_keep_split_tunnel_hidden.vbs` запускает его скрыто, а задача `BotCashFlowTunnelGuardian` поднимает его каждую минуту, если процесс убьют. Задача создана и запущена; проверка с VPS снова даёт `403`. Обновлены `docs/WINDOWS_SSH_TUNNEL.md` и журнал ниже.
+- По запросу пользователя вручную перезапущен split-канал на ПК: `scripts/start_split_tunnel.ps1 -Force` успешно поднял `receiver.py` и reverse tunnel через `plink`; дополнительно начата проверка watchdog/доступности `127.0.0.1:18080` на VPS. Файлы не менялись.
 - Поддержка **`DEPLOY_SSH_PASSWORD`**: `scripts/start_split_tunnel.ps1` и `scripts/watch_split_tunnel.ps1` читают пароль из `.env` или окружения; при его наличии туннель и проверка с ПК идут через **`plink.exe`** (PuTTY). Без пароля — по-прежнему OpenSSH и ключ. Обновлены `.env.example`, `docs/WINDOWS_SSH_TUNNEL.md`.
 - Исправление plink: **`Cannot confirm a host key in batch mode`** — в `start_split_tunnel.ps1` / `watch_split_tunnel.ps1` добавлен **`-hostkey`** с отпечатком `SHA256:…` (переменная **`CASHFLOW_PLINK_HOSTKEY`** при смене ключа на VPS). Удалён несуществующий у plink **`-keepalive`** (из‑за него процесс сразу завершался). Обновлён `docs/WINDOWS_SSH_TUNNEL.md`.
-- **`bot_server.py`:** при запросе к `RECEIVER_URL` — заголовок **`Connection: close`**, `httpx.Limits(max_keepalive_connections=0)`, таймаут connect/read до 15 с, до **3** попыток при `httpx.RequestError` с новым **`nonce`** (и новой подписью), без повтора при `HTTPStatusError`. См. «Server disconnected…» в `docs/WINDOWS_SSH_TUNNEL.md`.
+- **`bot_server.py`:** при запросе к `RECEIVER_URL` — заголовок **`Connection: close`**, `httpx.Limits(max_keepalive_connections=0)`, таймаут connect/read до 15 с, до **8** попыток при `httpx.RequestError` (паузы **2, 4, 8, 16, 32, 64, 128 с**, новый **`nonce`** и подпись), без повтора при `HTTPStatusError`. Ошибка в Telegram — только если все попытки исчерпаны (~4 мин ожидания). См. «Server disconnected…» в `docs/WINDOWS_SSH_TUNNEL.md`.
 - Деплой на VPS `62.60.186.183`: `git push dev master`, затем по SSH `git pull` в `/opt/app/bot-cashflow`, `pip install -r requirements.txt`, `systemctl restart cashflow-bot-server` — сервис `active`.
 
 **Чтобы больше не ловить те же сбои (краткий конспект для агента и человека):**

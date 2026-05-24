@@ -60,6 +60,16 @@ def parse_allowed_user_ids(raw: Optional[str]) -> Optional[set[int]]:
 
 ALLOWED_USER_IDS = parse_allowed_user_ids(os.getenv("ALLOWED_USER_IDS"))
 
+# Повторы POST на receiver при сетевых сбоях (кратковременный обрыв SSH-туннеля).
+# Паузы между попытками: 2, 4, 8, 16, 32, 64, 128 с (~4 мин суммарно).
+_RECEIVER_MAX_ATTEMPTS = 8
+_RECEIVER_RETRY_BASE_SEC = 2.0
+
+
+def _receiver_retry_delay_sec(attempt: int) -> float:
+    """attempt — индекс неудачной попытки (0-based) перед паузой."""
+    return _RECEIVER_RETRY_BASE_SEC * (2 ** attempt)
+
 
 def user_may_use_bot(user_id: Optional[int], allowed: Optional[set[int]]) -> bool:
     if allowed is None:
@@ -122,7 +132,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     timeout = httpx.Timeout(15.0, connect=10.0)
     last_net_err: Optional[BaseException] = None
 
-    for attempt in range(3):
+    for attempt in range(_RECEIVER_MAX_ATTEMPTS):
         payload = {
             "entries": entries,
             "event_ts": event_ts,
@@ -149,9 +159,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         except httpx.RequestError as e:
             last_net_err = e
-            logging.warning("Попытка %s/3, сеть до receiver: %s", attempt + 1, e)
-            if attempt < 2:
-                await asyncio.sleep(0.4 * (attempt + 1))
+            logging.warning(
+                "Попытка %s/%s, сеть до receiver: %s",
+                attempt + 1,
+                _RECEIVER_MAX_ATTEMPTS,
+                e,
+            )
+            if attempt < _RECEIVER_MAX_ATTEMPTS - 1:
+                await asyncio.sleep(_receiver_retry_delay_sec(attempt))
         except Exception as e:
             logging.exception("Ошибка отправки на receiver")
             await update.message.reply_text(f"Ошибка связи с ПК: {e}")

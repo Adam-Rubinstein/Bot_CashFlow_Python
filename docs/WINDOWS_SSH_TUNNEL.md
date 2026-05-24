@@ -15,6 +15,8 @@ RECEIVER_URL=http://127.0.0.1:18080
 1. **`receiver.py`** из venv проекта (`.venv\Scripts\python.exe`). Если venv отсутствует — автоматически ищет `py.exe`-лаунчер или системный `Python313/python.exe` (аналогично TaskManager). При полном отсутствии Python бросает исключение.
 2. **`ssh -R 127.0.0.1:18080:127.0.0.1:8080 root@<VPS>`** без отдельного окна (`-WindowStyle Hidden`).
 
+Общая проверка здоровья вынесена в [scripts/split_tunnel_health.ps1](../scripts/split_tunnel_health.ps1): она делает probe на VPS через `ssh`/`plink` с таймаутом, поэтому зависший remote-check не блокирует восстановление туннеля.
+
 ### Параметры
 
 | Параметр | Назначение |
@@ -46,6 +48,12 @@ cd D:\Desktop\Projects\Bot_CashFlow_Python
 - `TaskManager/scripts/windows_autostart/start_local_bot_services.ps1` — при входе в Windows поднимает Obsidian-bridge и вызывает **этот** `start_split_tunnel.ps1`.
 - Задача планировщика **`TaskManager-CashFlow-Watchdog`** (каждые **2** минуты) запускает **`WatchdogCashFlow.vbs`** → скрытый PowerShell → `start_split_tunnel.ps1` **без** `-Force` (только ensure: поднять туннель, если упал).
 
+В этом репозитории дополнительно есть **постоянный guardian**:
+
+- `scripts/keep_split_tunnel_alive.ps1` — бесконечный цикл с проверкой каждые 20 секунд; если `receiver` или reverse SSH падают, вызывает `scripts/watch_split_tunnel.ps1`, а при неожиданной ошибке сразу делает `start_split_tunnel.ps1 -Force`.
+- `scripts/run_keep_split_tunnel_hidden.vbs` — скрытый launcher для планировщика.
+- Задача планировщика **`BotCashFlowTunnelGuardian`** запускает этот guardian **каждую минуту**. Поскольку скрипт сам держит процесс и использует mutex, новая копия не стартует, пока уже живой guardian работает; если его убить, следующая минутная попытка поднимет его снова.
+
 Установка задач: из каталога TaskManager выполнить `install_autostart.ps1` (см. `TaskManager/docs/MemoryBank.md`, раздел про Windows).
 
 Путь к `start_split_tunnel.ps1` в **`WatchdogCashFlow.vbs`** зашит как  
@@ -57,7 +65,7 @@ cd D:\Desktop\Projects\Bot_CashFlow_Python
 
 ### В Telegram: «Ошибка связи с ПК: …» (`All connection attempts failed`, `Server disconnected…`)
 
-Источник — `httpx` на VPS: **нет TCP до** `RECEIVER_URL`, **нет ответа** от `receiver`, либо **обрыв до конца HTTP** (текст вроде `Server disconnected without sending a response` — нестабильный канал / keep-alive через SSH). В `bot_server.py` для этого отключено переиспользование TCP к приёмнику и добавлены короткие повторы. Чаще всего при полном отказе **упал обратный SSH** (на VPS `127.0.0.1:18080` не слушает). **Конспект уже исправленных ловушек** (plink `-hostkey`, без ложного `-keepalive`, деплой после правок `bot_server`): [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md).
+Источник — `httpx` на VPS: **нет TCP до** `RECEIVER_URL`, **нет ответа** от `receiver`, либо **обрыв до конца HTTP** (текст вроде `Server disconnected without sending a response` — нестабильный канал / keep-alive через SSH). В `bot_server.py` для этого отключено переиспользование TCP к приёмнику и до **8** повторов с паузами **2, 4, 8, 16, 32, 64, 128 с** (ошибка в Telegram — только если все попытки не удались). Чаще всего при полном отказе **упал обратный SSH** (на VPS `127.0.0.1:18080` не слушает). **Конспект уже исправленных ловушек** (plink `-hostkey`, без ложного `-keepalive`, деплой после правок `bot_server`): [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md).
 
 1. **ПК:** поднять туннель заново: `.\scripts\start_split_tunnel.ps1 -Force`.
 2. **VPS:** `systemctl status cashflow-bot-server`.
@@ -84,6 +92,18 @@ schtasks /Create /F /TN "BotCashFlowTunnelWatch" /TR "wscript.exe //B D:\Desktop
 Если путь к репозиторию содержит пробелы, возьмите `/TR` в кавычки и экранируйте внутренние кавычки под вашу оболочку (в PowerShell удобнее обернуть аргумент в одинарные кавычки целиком).
 
 Скрипт [scripts/run_watch_tunnel_hidden.vbs](../scripts/run_watch_tunnel_hidden.vbs) вызывает PowerShell с `-WindowStyle Hidden` и `WshShell.Run(..., 0, True)` (стиль окна 0 = скрытый, ожидание завершения).
+
+### Постоянный guardian
+
+Если нужен режим «не выключается, пока ПК включён», используйте [scripts/keep_split_tunnel_alive.ps1](../scripts/keep_split_tunnel_alive.ps1) вместе с [scripts/run_keep_split_tunnel_hidden.vbs](../scripts/run_keep_split_tunnel_hidden.vbs). Это уже не разовая проверка, а постоянный процесс: он сам проверяет туннель, перезапускает его и защищён mutex'ом от второго экземпляра.
+
+Рекомендуемый `schtasks`:
+
+```text
+schtasks /Create /F /TN "BotCashFlowTunnelGuardian" /TR "wscript.exe //B D:\Desktop\Projects\Bot_CashFlow_Python\scripts\run_keep_split_tunnel_hidden.vbs" /SC MINUTE /MO 1 /RL LIMITED
+```
+
+Эта задача полезна именно тогда, когда нужно, чтобы watchdog сам поднимался снова после убийства процесса. Внутри guardian использует тот же timeout-safe health probe, что и `watch_split_tunnel.ps1`.
 
 Альтернатива без VBS (если окно всё ещё мелькает — см. ниже):
 

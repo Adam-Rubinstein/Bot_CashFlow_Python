@@ -30,7 +30,7 @@
 
 **Симптом:** не то же самое, что «все попытки соединения провалились»: до ПК достучались, но **ответ HTTP не дошёл** (обрыв на пробросе, плохой keep-alive клиента).
 
-**Исправление в коде:** в **`bot_server.py`** — **`Connection: close`**, `max_keepalive_connections=0`, увеличенный таймаут, до **3** повторов при **`httpx.RequestError`** с **новым nonce** (иначе receiver отклонит повтор по nonce).
+**Исправление в коде:** в **`bot_server.py`** — **`Connection: close`**, `max_keepalive_connections=0`, увеличенный таймаут, до **8** повторов при **`httpx.RequestError`** (паузы **2, 4, 8, 16, 32, 64, 128 с**, новый **nonce** на каждую попытку). Ошибка в Telegram только после всех попыток.
 
 **Важно:** после изменений **`bot_server.py`** обязателен **деплой на VPS** (`git pull`, `systemctl restart cashflow-bot-server`), иначе пользователь продолжит видеть старую ошибку.
 
@@ -44,3 +44,7 @@
 | `systemctl status cashflow-bot-server` | **active** |
 
 Если **403** есть, а в Telegram всё ещё ошибка — смотреть версию **`bot_server.py`** на сервере (деплой) и логи `journalctl -u cashflow-bot-server`.
+
+### 5. Если процесс watchdog убивают вручную
+
+В этом репозитории есть постоянный guardian `scripts/keep_split_tunnel_alive.ps1`, запускаемый скрыто через `scripts/run_keep_split_tunnel_hidden.vbs` и задачу `BotCashFlowTunnelGuardian`. Он использует timeout-safe health probe и снова поднимает `start_split_tunnel.ps1 -Force`, если reverse SSH или локальный `receiver` перестал отвечать.
