@@ -66,17 +66,18 @@ Telegram-бот для учёта **расходов и доходов**: пол
 
 ## Формат сообщения пользователя
 
-- Одна или несколько строк; каждая строка: `product; source; amount[; +]`.
+- Одна или несколько строк; каждая строка: `product; source; amount[; +|-]`.
 - **Расход:** сумма без префикса, например `Еда; Лента; 1755.5`.
 - **Доход:** сумма с ведущим `+` в поле суммы, например `Зарплата; Работа; +50000`.
-- Четвёртое поле **`+`** (ровно четвёртая часть после `;`) — флаг «woman» (в таблице колонка Woman / `+`).
+- Четвёртое поле **`+`** — флаг «woman» (колонка Woman / `+`); **`−`** — флаг «work» (колонка Work / `−`). Флаги взаимоисключающие.
 
 Парсер: `parse_message` в `bot.py` / `bot_server.py` (логика совпадает).
 
 ## Файлы vault (Markdown)
 
 - Путь: `{VAULT_PATH}/{YYYY}/{MM_MonthName}/{DD.MM.YYYY}.md`.
-- Внутри: секции `## *Spending:*` и `## *Income:*`, markdown-таблицы; при появлении флага woman добавляется колонка Woman.
+- Внутри: секции `## *Spending:*` и `## *Income:*`, markdown-таблицы; при наличии woman и/или work — колонки **Woman** и **Work** (обе, если хотя бы один флаг в секции).
+- Дашборд Obsidian: `00 - Dashboard cash flow.md` — фильтры «Женщина» / «Работа» (взаимоисключающие).
 
 ## Переменные окружения (сводка)
 
@@ -182,7 +183,7 @@ LGPL v3.0 — см. `LICENSE` в корне.
 
 ### 2026-05-24
 
-- **`bot_server.py`:** при сетевых сбоях до `RECEIVER_URL` — **8** попыток с экспоненциальной паузой **2, 4, 8, 16, 32, 64, 128 с**; пользователю ошибка «Ошибка связи с ПК» только после исчерпания повторов (~4 мин). Тесты `tests/test_bot_server_split.py`. **Нужен деплой на VPS** (`git pull` + `systemctl restart cashflow-bot-server`).
+- **`bot_server.py`:** при сетевых сбоях до `RECEIVER_URL` — **8** попыток с экспоненциальной паузой **2, 4, 8, 16, 32, 64, 128 с**; пользователю ошибка «Ошибка связи с ПК» только после исчерпания повторов (~4 мин). Тесты `tests/test_bot_server_split.py`. **Деплой на VPS 2026-05-24:** `pscp` + `systemctl restart cashflow-bot-server` — сервис `active`, `_RECEIVER_MAX_ATTEMPTS = 8`.
 
 ### 2026-05-06
 
@@ -229,6 +230,10 @@ LGPL v3.0 — см. `LICENSE` в корне.
 - Развёрнуто на VPS `62.60.186.183`: `/opt/app/bot-cashflow`, systemd `cashflow-bot-server`, `.env` с `RECEIVER_URL=http://127.0.0.1:18080` (обратный SSH с ПК). На Windows: скрипт `scripts/start_split_tunnel.ps1`, автозапуск через `HKCU\...\Run\BotCashFlowSplitTunnel`. Код запушен в GitHub; VPS обновлён `git pull`.
 - Сгенерирован общий `RECEIVER_SECRET` (RNG), записан в корневой `.env` и в `docs/REAL_DEPLOYMENT_DATA.local.md` (в `.gitignore`); добавлен шаблон `docs/REAL_DEPLOYMENT_DATA.template.md`.
 - Реализована защита канала VPS → ПК: [security.py](../security.py) (HMAC-SHA256, канонический JSON), [receiver.py](../receiver.py) (подпись, nonce anti-replay, окно `event_ts`, привязка к `127.0.0.1` по умолчанию), [bot_server.py](../bot_server.py) (подпись тела, обязательный секрет ≥24 символов). Документация: [RECEIVER_SECURITY.md](./RECEIVER_SECURITY.md); обновлены [deploy/README.md](../deploy/README.md), [.env.example](../.env.example). Тесты: `tests/test_security.py`, `tests/test_receiver_security.py`.
+
+### 2026-07-05
+
+- Флаг **work**: четвёртое поле `-` в сообщении бота (`Сервер; Hetzner; 1200; -`); колонка **Work** в markdown-таблицах vault. Обновлены `parse_message` в `bot.py` / `bot_server.py`, `read_file` / `build_table` / `write_file` в `bot.py` / `receiver.py`, `scripts/import_telegram_backlog.py`, тесты. Дашборд Obsidian `00 - Dashboard cash flow.md` — кнопка «Работа», фильтры взаимоисключающие с «Женщина».
 
 ### 2026-04-05
 

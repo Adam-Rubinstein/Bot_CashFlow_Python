@@ -104,7 +104,7 @@ def message_event_datetime(message: Optional[Message], tz: tzinfo) -> datetime:
 
 
 def parse_message(text):
-    """Парсит сообщение в формат: товар; источник; сумма[; +]"""
+    """Парсит сообщение в формат: товар; источник; сумма[; +|-]"""
     lines = [line.strip() for line in text.strip().split('\n') if line.strip()]
     entries = []
 
@@ -119,10 +119,14 @@ def parse_message(text):
         source = parts[1].strip()
         amount_str = parts[2].strip()
         woman = False
+        work = False
 
-        # Проверяем, есть ли + в конце (4-й элемент)
-        if len(parts) >= 4 and parts[3].strip() == '+':
-            woman = True
+        if len(parts) >= 4:
+            flag = parts[3].strip()
+            if flag == '+':
+                woman = True
+            elif flag == '-':
+                work = True
 
         is_income = amount_str.startswith('+')
         amount_str = amount_str.replace('+', '').replace(' ', '').replace(',', '.')
@@ -134,7 +138,8 @@ def parse_message(text):
                 'source': source,
                 'amount': amount,
                 'is_income': is_income,
-                'woman': woman
+                'woman': woman,
+                'work': work,
             })
         except ValueError:
             logging.warning("Ошибка парсинга: %s", amount_str)
@@ -158,9 +163,28 @@ def get_file_path(for_date: datetime):
     return file_path
 
 
+def _normalize_row(cells):
+    """Приводит ячейки строки таблицы к [product, source, amount, woman_val, work_val]."""
+    product, source, amount = cells[0], cells[1], cells[2]
+    woman_val = ""
+    work_val = ""
+    if len(cells) >= 5:
+        if cells[3].strip() == '+':
+            woman_val = '+'
+        if cells[4].strip() == '-':
+            work_val = '-'
+    elif len(cells) >= 4:
+        v = cells[3].strip()
+        if v == '+':
+            woman_val = '+'
+        elif v == '-':
+            work_val = '-'
+    return [product, source, amount, woman_val, work_val]
+
+
 def read_file(file_path):
     if not os.path.exists(file_path):
-        return [], [], False, False
+        return [], [], False, False, False, False
 
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
@@ -169,6 +193,8 @@ def read_file(file_path):
     income = []
     spending_has_woman = False
     income_has_woman = False
+    spending_has_work = False
+    income_has_work = False
 
     in_spending = False
     in_income = False
@@ -189,18 +215,22 @@ def read_file(file_path):
         # ВАЖНО: Не удаляем пробелы внутри строки!
         cells = [c.strip().replace(',', '.') for c in line.split('|') if c.strip()]
         if len(cells) >= 3:
-            has_woman_col = len(cells) >= 4
+            row = _normalize_row(cells)
 
             if in_spending:
-                spending.append(cells)
-                if has_woman_col and cells[3].strip():
+                spending.append(row)
+                if row[3]:
                     spending_has_woman = True
+                if row[4]:
+                    spending_has_work = True
             elif in_income:
-                income.append(cells)
-                if has_woman_col and cells[3].strip():
+                income.append(row)
+                if row[3]:
                     income_has_woman = True
+                if row[4]:
+                    income_has_work = True
 
-    return spending, income, spending_has_woman, income_has_woman
+    return spending, income, spending_has_woman, income_has_woman, spending_has_work, income_has_work
 
 
 def format_amount(amount_float):
@@ -226,43 +256,45 @@ def format_amount(amount_float):
         return formatted_int
 
 
-def build_table(rows, has_woman):
+def build_table(rows, has_woman, has_work):
     """Строит строки таблицы"""
+    show_flags = has_woman or has_work
     table_rows = ""
     for row in rows:
         amount_float = float(row[2].replace(' ', '').replace(',', '.'))
         amount = format_amount(amount_float)
 
-        if has_woman:
+        if show_flags:
             woman_val = row[3] if len(row) >= 4 else ""
-            table_rows += f"|   {row[0]}   |  {row[1]}  | {amount} |   {woman_val}   |\n"
+            work_val = row[4] if len(row) >= 5 else ""
+            table_rows += f"|   {row[0]}   |  {row[1]}  | {amount} |   {woman_val}   |   {work_val}   |\n"
         else:
             table_rows += f"|   {row[0]}   |  {row[1]}  | {amount} |\n"
 
     if not table_rows:
-        if has_woman:
-            table_rows = "|   |   |   |   |\n"
+        if show_flags:
+            table_rows = "|   |   |   |   |   |\n"
         else:
             table_rows = "|   |   |   |\n"
 
     return table_rows
 
 
-def write_file(file_path, spending, income, spending_has_woman, income_has_woman, title_date: datetime):
+def write_file(file_path, spending, income, spending_has_woman, income_has_woman,
+               spending_has_work, income_has_work, title_date: datetime):
     """Записывает данные в файл"""
     date_str = title_date.strftime('%d.%m.%Y')
 
-    spending_rows = build_table(spending, spending_has_woman)
-    income_rows = build_table(income, income_has_woman)
+    spending_rows = build_table(spending, spending_has_woman, spending_has_work)
+    income_rows = build_table(income, income_has_woman, income_has_work)
 
-    # Строим таблицы с правильными разделителями
-    if spending_has_woman:
-        spending_header = "| Product | Source |  Sum  | Woman |\n|:-------:|:------:|:-----:|:-----:|"
+    if spending_has_woman or spending_has_work:
+        spending_header = "| Product | Source |  Sum  | Woman | Work |\n|:-------:|:------:|:-----:|:-----:|:----:|"
     else:
         spending_header = "| Product | Source |  Sum  |\n|:-------:|:------:|:-----:|"
 
-    if income_has_woman:
-        income_header = "| Product | Source | Sum | Woman |\n| :-----: | :----: | :-: | :-----: |"
+    if income_has_woman or income_has_work:
+        income_header = "| Product | Source | Sum | Woman | Work |\n| :-----: | :----: | :-: | :-----: | :----: |"
     else:
         income_header = "| Product | Source | Sum |\n| :-----: | :----: | :-: |"
 
@@ -300,30 +332,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info("Распарсено entries: %s", entries)
 
     if not entries:
-        await update.message.reply_text("Invalid format! Example:\nProduct; Source; Sum\nOR\nProduct; Source; Sum; +")
+        await update.message.reply_text(
+            "Invalid format! Example:\nProduct; Source; Sum\nOR\nProduct; Source; Sum; +\nOR\nProduct; Source; Sum; -"
+        )
         return
 
     file_path = get_file_path(event_dt)
-    spending, income, spending_has_woman, income_has_woman = read_file(file_path)
+    spending, income, spending_has_woman, income_has_woman, spending_has_work, income_has_work = read_file(file_path)
 
-    # Проверяем, есть ли новые записи с woman = True
     for entry in entries:
         if entry['woman']:
             if entry['is_income']:
                 income_has_woman = True
             else:
                 spending_has_woman = True
+        if entry['work']:
+            if entry['is_income']:
+                income_has_work = True
+            else:
+                spending_has_work = True
 
-    # Добавляем новые записи
     for entry in entries:
         woman_val = "+" if entry['woman'] else ""
-        row = [entry['product'], entry['source'], str(entry['amount']), woman_val]
+        work_val = "-" if entry['work'] else ""
+        row = [entry['product'], entry['source'], str(entry['amount']), woman_val, work_val]
         if entry['is_income']:
             income.append(row)
         else:
             spending.append(row)
 
-    write_file(file_path, spending, income, spending_has_woman, income_has_woman, event_dt)
+    write_file(
+        file_path, spending, income,
+        spending_has_woman, income_has_woman,
+        spending_has_work, income_has_work,
+        event_dt,
+    )
 
     await update.message.reply_text(
         f"Added {len(entries)} records to {os.path.basename(file_path)}"

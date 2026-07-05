@@ -13,27 +13,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
-function Read-DotEnvKey([string]$LiteralPath, [string]$Key) {
-    if (-not (Test-Path -LiteralPath $LiteralPath)) { return $null }
-    foreach ($line in Get-Content -LiteralPath $LiteralPath) {
-        $t = $line.Trim()
-        if ($t.Length -eq 0 -or $t.StartsWith("#")) { continue }
-        $eq = $t.IndexOf("=")
-        if ($eq -lt 1) { continue }
-        $k = $t.Substring(0, $eq).Trim()
-        if ($k -ne $Key) { continue }
-        $v = $t.Substring($eq + 1).Trim()
-        if ($v.Length -ge 2) {
-            $a = $v[0]
-            $b = $v[$v.Length - 1]
-            if (($a -eq [char]34 -and $b -eq [char]34) -or ($a -eq [char]39 -and $b -eq [char]39)) {
-                $v = $v.Substring(1, $v.Length - 2)
-            }
-        }
-        return $v
-    }
-    return $null
-}
+. (Join-Path $PSScriptRoot "split_tunnel_health.ps1")
 
 $SshHost = if ($SshHost) { $SshHost } elseif ($env:CASHFLOW_VPS_SSH_HOST) { $env:CASHFLOW_VPS_SSH_HOST } else { "root@62.60.186.183" }
 $RemoteForward = if ($RemoteForward) { $RemoteForward } elseif ($env:CASHFLOW_REMOTE_FORWARD) { $env:CASHFLOW_REMOTE_FORWARD } else { "127.0.0.1:18080:127.0.0.1:8080" }
@@ -93,16 +73,11 @@ if (-not $Force) {
         return $false
     })
     if ($receiverOk.Count -ge 1 -and $tunnelOk.Count -ge 1) {
-        try {
-            $tcp = New-Object System.Net.Sockets.TcpClient
-            $tcp.ReceiveTimeout = 800
-            $tcp.SendTimeout = 800
-            $tcp.Connect("127.0.0.1", 8080)
-            $tcp.Close()
-            Write-Host "Receiver + SSH already running; port 8080 OK. Root: $Root"
+        if (Test-SplitTunnelHealthy -SshHost $SshHost -RemoteProbeUrl "http://127.0.0.1:18080/" -DeployPw $deployPw -PlinkHostKey $PlinkHostKey -TimeoutSeconds 15) {
+            Write-Host "Receiver + SSH already running; VPS probe 403 OK. Root: $Root"
             exit 0
-        } catch {
-            Write-Host "Processes exist but port 8080 not accepting - will restart. ($($_.Exception.Message))"
+        } else {
+            Write-Host "Processes exist but VPS probe is unhealthy - will restart."
         }
     }
 }

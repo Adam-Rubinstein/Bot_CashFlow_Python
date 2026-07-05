@@ -57,11 +57,12 @@ LINE_RE = re.compile(
 
 def entry_to_row(entry: dict) -> list[str]:
     w = "+" if entry["woman"] else ""
-    return [entry["product"], entry["source"], str(entry["amount"]), w]
+    work = "-" if entry.get("work") else ""
+    return [entry["product"], entry["source"], str(entry["amount"]), w, work]
 
 
 def row_key(row: list[str]) -> tuple:
-    return tuple(c.strip() for c in row[:4]) if len(row) >= 4 else tuple(row)
+    return tuple(c.strip() for c in row[:5]) if len(row) >= 5 else tuple(row)
 
 
 def parse_export_line(line: str) -> tuple[datetime, dict] | None:
@@ -132,14 +133,16 @@ def main() -> None:
             else:
                 spend_new.append((dt, row))
 
-        sp, inc, sh, ih = read_file(path)
+        sp, inc, sh, ih, sw, iw = read_file(path)
         sp = merge_section(sp, spend_new)
         inc = merge_section(inc, inc_new)
 
         sh = any(len(r) >= 4 and r[3].strip() for r in sp)
         ih = any(len(r) >= 4 and r[3].strip() for r in inc)
+        sw = any(len(r) >= 5 and r[4].strip() for r in sp)
+        iw = any(len(r) >= 5 and r[4].strip() for r in inc)
 
-        write_file(path, sp, inc, sh, ih, title_dt)
+        write_file(path, sp, inc, sh, ih, sw, iw, title_dt)
         print(f"OK {d} -> {path} (расходов {len(sp)}, доходов {len(inc)})")
 
     print("Готово.")

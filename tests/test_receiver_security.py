@@ -29,7 +29,7 @@ def receiver_app(monkeypatch, tmp_path: Path):
 def test_receiver_insecure_accepts_unsigned(receiver_app):
     client = TestClient(receiver_app)
     payload = {
-        "entries": [{"product": "a", "source": "b", "amount": 10.0, "is_income": False, "woman": False}],
+        "entries": [{"product": "a", "source": "b", "amount": 10.0, "is_income": False, "woman": False, "work": False}],
         "event_ts": time.time(),
         "nonce": "test-nonce-uuid-0001",
     }
@@ -53,7 +53,7 @@ def test_receiver_secure_requires_signature(monkeypatch, tmp_path: Path):
     client = TestClient(receiver.app)
 
     payload = {
-        "entries": [{"product": "a", "source": "b", "amount": 1.0, "is_income": False, "woman": False}],
+        "entries": [{"product": "a", "source": "b", "amount": 1.0, "is_income": False, "woman": False, "work": False}],
         "event_ts": time.time(),
         "nonce": "nonce-secure-0002",
     }
@@ -69,3 +69,29 @@ def test_receiver_secure_requires_signature(monkeypatch, tmp_path: Path):
     # replay same nonce
     r3 = client.post("/", content=body, headers=good)
     assert r3.status_code == 403
+
+
+def test_receiver_secure_rejects_stale_event_ts(monkeypatch, tmp_path: Path):
+    secret = "s" * 32
+    monkeypatch.setenv("VAULT_PATH", str(tmp_path))
+    monkeypatch.setenv("RECEIVER_INSECURE_DEV", "")
+    monkeypatch.setenv("RECEIVER_SECRET", secret)
+    monkeypatch.setenv("USER_TIMEZONE", "UTC+3")
+
+    import importlib
+
+    import receiver
+
+    importlib.reload(receiver)
+    client = TestClient(receiver.app)
+
+    payload = {
+        "entries": [{"product": "a", "source": "b", "amount": 1.0, "is_income": False, "woman": False, "work": False}],
+        "event_ts": time.time() - 3600,
+        "nonce": "nonce-stale-0003",
+    }
+    body = canonical_json_bytes(payload)
+    headers = {SIGNATURE_HEADER: sign_body(secret, body)}
+
+    r = client.post("/", content=body, headers=headers)
+    assert r.status_code == 403

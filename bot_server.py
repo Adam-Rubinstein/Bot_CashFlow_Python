@@ -90,8 +90,13 @@ def parse_message(text):
         source = parts[1].strip()
         amount_str = parts[2].strip()
         woman = False
-        if len(parts) >= 4 and parts[3].strip() == '+':
-            woman = True
+        work = False
+        if len(parts) >= 4:
+            flag = parts[3].strip()
+            if flag == '+':
+                woman = True
+            elif flag == '-':
+                work = True
         is_income = amount_str.startswith('+')
         amount_str = amount_str.replace('+', '').replace(' ', '').replace(',', '.')
         try:
@@ -101,7 +106,8 @@ def parse_message(text):
                 'source': source,
                 'amount': amount,
                 'is_income': is_income,
-                'woman': woman
+                'woman': woman,
+                'work': work,
             })
         except ValueError:
             logging.warning("Ошибка парсинга: %s", amount_str)
@@ -120,7 +126,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     entries = parse_message(text)
     if not entries:
-        await update.message.reply_text("Invalid format! Example:\nProduct; Source; Sum\nOR\nProduct; Source; Sum; +")
+        await update.message.reply_text(
+            "Invalid format! Example:\nProduct; Source; Sum\nOR\nProduct; Source; Sum; +\nOR\nProduct; Source; Sum; -"
+        )
         return
 
     msg_date = update.message.date
