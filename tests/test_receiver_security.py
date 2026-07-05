@@ -29,7 +29,7 @@ def receiver_app(monkeypatch, tmp_path: Path):
 def test_receiver_insecure_accepts_unsigned(receiver_app):
     client = TestClient(receiver_app)
     payload = {
-        "entries": [{"product": "a", "source": "b", "amount": 10.0, "is_income": False, "woman": False, "work": False}],
+        "entries": [{"product": "a", "source": "b", "amount": 10.0, "is_income": False, "woman": False, "work": ""}],
         "event_ts": time.time(),
         "nonce": "test-nonce-uuid-0001",
     }
@@ -53,7 +53,7 @@ def test_receiver_secure_requires_signature(monkeypatch, tmp_path: Path):
     client = TestClient(receiver.app)
 
     payload = {
-        "entries": [{"product": "a", "source": "b", "amount": 1.0, "is_income": False, "woman": False, "work": False}],
+        "entries": [{"product": "a", "source": "b", "amount": 1.0, "is_income": False, "woman": False, "work": ""}],
         "event_ts": time.time(),
         "nonce": "nonce-secure-0002",
     }
@@ -86,7 +86,7 @@ def test_receiver_secure_rejects_stale_event_ts(monkeypatch, tmp_path: Path):
     client = TestClient(receiver.app)
 
     payload = {
-        "entries": [{"product": "a", "source": "b", "amount": 1.0, "is_income": False, "woman": False, "work": False}],
+        "entries": [{"product": "a", "source": "b", "amount": 1.0, "is_income": False, "woman": False, "work": ""}],
         "event_ts": time.time() - 3600,
         "nonce": "nonce-stale-0003",
     }

@@ -25,7 +25,7 @@ class TestParseMessage:
         assert e[0]["amount"] == 1755.5
         assert e[0]["is_income"] is False
         assert e[0]["woman"] is False
-        assert e[0]["work"] is False
+        assert e[0]["work"] == ""
 
     def test_income_plus_prefix(self):
         e = parse_message("a; b; +100")
@@ -35,11 +35,16 @@ class TestParseMessage:
     def test_woman_flag(self):
         e = parse_message("a; b; 10; +")
         assert e[0]["woman"] is True
-        assert e[0]["work"] is False
+        assert e[0]["work"] == ""
 
     def test_work_flag(self):
+        e = parse_message("a; b; 10; Менторство")
+        assert e[0]["work"] == "Менторство"
+        assert e[0]["woman"] is False
+
+    def test_work_legacy_dash(self):
         e = parse_message("a; b; 10; -")
-        assert e[0]["work"] is True
+        assert e[0]["work"] == "-"
         assert e[0]["woman"] is False
 
     def test_multiline(self):

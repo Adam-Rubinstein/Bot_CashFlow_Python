@@ -88,15 +88,22 @@ def _normalize_row(cells):
     if len(cells) >= 5:
         if cells[3].strip() == '+':
             woman_val = '+'
-        if cells[4].strip() == '-':
-            work_val = '-'
+        work_val = cells[4].strip()
     elif len(cells) >= 4:
         v = cells[3].strip()
         if v == '+':
             woman_val = '+'
-        elif v == '-':
-            work_val = '-'
+        elif v:
+            work_val = v
     return [product, source, amount, woman_val, work_val]
+
+
+def _entry_work(val) -> str:
+    if val is True:
+        return "-"
+    if not val:
+        return ""
+    return str(val).strip()
 
 
 def read_file(file_path):
@@ -251,14 +258,15 @@ async def handle(request: Request):
                     income_has_woman = True
                 else:
                     spending_has_woman = True
-            if entry.get('work'):
+            work_text = _entry_work(entry.get('work'))
+            if work_text:
                 if entry['is_income']:
                     income_has_work = True
                 else:
                     spending_has_work = True
         for entry in entries:
             woman_val = "+" if entry.get('woman') else ""
-            work_val = "-" if entry.get('work') else ""
+            work_val = _entry_work(entry.get('work'))
             row = [entry['product'], entry['source'], str(entry['amount']), woman_val, work_val]
             if entry['is_income']:
                 income.append(row)

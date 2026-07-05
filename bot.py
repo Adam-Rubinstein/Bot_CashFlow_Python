@@ -104,12 +104,11 @@ def message_event_datetime(message: Optional[Message], tz: tzinfo) -> datetime:
 
 
 def parse_message(text):
-    """Парсит сообщение в формат: товар; источник; сумма[; +|-]"""
+    """Парсит сообщение в формат: товар; источник; сумма[; +|вид деятельности]"""
     lines = [line.strip() for line in text.strip().split('\n') if line.strip()]
     entries = []
 
     for line in lines:
-        # Разбиваем по точке с запятой
         parts = [p.strip() for p in line.split(';')]
 
         if len(parts) < 3:
@@ -119,14 +118,14 @@ def parse_message(text):
         source = parts[1].strip()
         amount_str = parts[2].strip()
         woman = False
-        work = False
+        work = ""
 
         if len(parts) >= 4:
-            flag = parts[3].strip()
-            if flag == '+':
+            tag = parts[3].strip()
+            if tag == '+':
                 woman = True
-            elif flag == '-':
-                work = True
+            elif tag:
+                work = tag
 
         is_income = amount_str.startswith('+')
         amount_str = amount_str.replace('+', '').replace(' ', '').replace(',', '.')
@@ -171,14 +170,13 @@ def _normalize_row(cells):
     if len(cells) >= 5:
         if cells[3].strip() == '+':
             woman_val = '+'
-        if cells[4].strip() == '-':
-            work_val = '-'
+        work_val = cells[4].strip()
     elif len(cells) >= 4:
         v = cells[3].strip()
         if v == '+':
             woman_val = '+'
-        elif v == '-':
-            work_val = '-'
+        elif v:
+            work_val = v
     return [product, source, amount, woman_val, work_val]
 
 
@@ -333,7 +331,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not entries:
         await update.message.reply_text(
-            "Invalid format! Example:\nProduct; Source; Sum\nOR\nProduct; Source; Sum; +\nOR\nProduct; Source; Sum; -"
+            "Invalid format! Example:\nProduct; Source; Sum\nOR\nProduct; Source; Sum; +\nOR\nProduct; Source; Sum; Mentoring"
         )
         return
 
@@ -354,7 +352,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for entry in entries:
         woman_val = "+" if entry['woman'] else ""
-        work_val = "-" if entry['work'] else ""
+        work_val = entry['work']
         row = [entry['product'], entry['source'], str(entry['amount']), woman_val, work_val]
         if entry['is_income']:
             income.append(row)

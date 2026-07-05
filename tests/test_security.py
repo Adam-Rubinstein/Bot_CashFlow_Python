@@ -28,7 +28,7 @@ def test_sign_verify_roundtrip():
 
 def test_canonical_stable_for_unicode():
     secret = "y" * 24
-    p1 = {"event_ts": 1.0, "entries": [{"product": "Еда", "source": "Маг", "amount": 1.0, "is_income": False, "woman": False, "work": False}], "nonce": "n"}
+    p1 = {"event_ts": 1.0, "entries": [{"product": "Еда", "source": "Маг", "amount": 1.0, "is_income": False, "woman": False, "work": ""}], "nonce": "n"}
     b1 = canonical_json_bytes(p1)
     b2 = canonical_json_bytes(p1)
     assert b1 == b2

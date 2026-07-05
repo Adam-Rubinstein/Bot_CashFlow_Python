@@ -90,13 +90,13 @@ def parse_message(text):
         source = parts[1].strip()
         amount_str = parts[2].strip()
         woman = False
-        work = False
+        work = ""
         if len(parts) >= 4:
-            flag = parts[3].strip()
-            if flag == '+':
+            tag = parts[3].strip()
+            if tag == '+':
                 woman = True
-            elif flag == '-':
-                work = True
+            elif tag:
+                work = tag
         is_income = amount_str.startswith('+')
         amount_str = amount_str.replace('+', '').replace(' ', '').replace(',', '.')
         try:
@@ -127,7 +127,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     entries = parse_message(text)
     if not entries:
         await update.message.reply_text(
-            "Invalid format! Example:\nProduct; Source; Sum\nOR\nProduct; Source; Sum; +\nOR\nProduct; Source; Sum; -"
+            "Invalid format! Example:\nProduct; Source; Sum\nOR\nProduct; Source; Sum; +\nOR\nProduct; Source; Sum; Mentoring"
         )
         return
 

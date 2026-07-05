@@ -57,7 +57,7 @@ LINE_RE = re.compile(
 
 def entry_to_row(entry: dict) -> list[str]:
     w = "+" if entry["woman"] else ""
-    work = "-" if entry.get("work") else ""
+    work = entry.get("work") or ""
     return [entry["product"], entry["source"], str(entry["amount"]), w, work]
 
 
