@@ -41,7 +41,7 @@ Telegram-бот для учёта **расходов и доходов**: пол
 
 Если **локально** не доходит до `api.telegram.org`, а файлы нужны **на ПК**: используйте split-режим (**`bot_server.py` на VPS** + **`receiver.py` на ПК** + туннель bore/ngrok), либо **SOCKS5/HTTP** на VPS в `PROXY_URL`, либо VPN на ПК. Подробно: [TELEGRAM_BLOCKING_AND_PROXY.md](./TELEGRAM_BLOCKING_AND_PROXY.md).
 
-**VPS:** IPv4 `62.60.186.183`, SSH `ssh root@62.60.186.183`. Установка и systemd для `bot_server.py`: [deploy/README.md](../deploy/README.md). MTProto-прокси на сервере (например порт `1443`) работает для **клиента Telegram**, не для `python-telegram-bot`.
+**VPS:** IPv4 `84.22.149.170`, SSH `ssh root@84.22.149.170`. Установка и systemd для `bot_server.py`: [deploy/README.md](../deploy/README.md). MTProto-прокси на сервере (например порт `1443`) работает для **клиента Telegram**, не для `python-telegram-bot`.
 
 ### B. VPS + туннель + ПК: `bot_server.py` + `receiver.py`
 
@@ -108,8 +108,8 @@ Telegram-бот для учёта **расходов и доходов**: пол
 
 | Параметр | Значение |
 |----------|----------|
-| **IPv4** | `62.60.186.183` |
-| **Вход по SSH** | `ssh root@62.60.186.183` |
+| **IPv4** | `84.22.149.170` |
+| **Вход по SSH** | `ssh root@84.22.149.170` |
 | **Пользователь systemd в примерах** | `root` |
 
 ### Пути на сервере
@@ -181,6 +181,14 @@ LGPL v3.0 — см. `LICENSE` в корне.
 
 ## Журнал
 
+### 2026-09-21
+
+- **`All connection attempts failed`:** с ПК **TCP `84.22.149.170:22` недоступен** (бот на VPS при этом отвечает в Telegram) — туннель поднять нельзя; публичный IP ПК `109.173.126.195` (проверить fail2ban/firewall на VPS). Guardian раньше каждые 20 с делал `-Force` и усугублял бан. Исправление: `Get-SplitTunnelHealth` (`Healthy`/`VpsUnreachable`/`TunnelBroken`), при unreachable — **без Force** + backoff; plink keepalive через сессию PuTTY `BotCashFlowReverse` (`PingInterval=30`); задача `BotCashFlowTunnelWatch` снова **Enabled**; лог `logs/split_tunnel_guardian.log`. Файлы: `scripts/split_tunnel_health.ps1`, `keep_split_tunnel_alive.ps1`, `watch_split_tunnel.ps1`, `start_split_tunnel.ps1`, `docs/TROUBLESHOOTING_SPLIT.md`.
+
+### 2026-09-11
+
+- **400 Bad Request** в split при записи (`Еда; OZON; 2913; +`): туннель OK, падение `receiver.build_table` на сумме с nbsp/U+202C в `11.09.2026.md`. В [`receiver.py`](../receiver.py) добавлен `_parse_amount_str` (как в `bot.py`); тесты в `tests/test_receiver_security.py`. Приёмник перезапущен `start_split_tunnel.ps1 -Force`. В [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md) — симптом `400 Bad Request` ≠ обрыв SSH.
+
 ### 2026-05-24
 
 - **`bot_server.py`:** при сетевых сбоях до `RECEIVER_URL` — **8** попыток с экспоненциальной паузой **2, 4, 8, 16, 32, 64, 128 с**; пользователю ошибка «Ошибка связи с ПК» только после исчерпания повторов (~4 мин). Тесты `tests/test_bot_server_split.py`. **Деплой на VPS 2026-05-24:** `pscp` + `systemctl restart cashflow-bot-server` — сервис `active`, `_RECEIVER_MAX_ATTEMPTS = 8`.
@@ -193,14 +201,15 @@ LGPL v3.0 — см. `LICENSE` в корне.
 - Поддержка **`DEPLOY_SSH_PASSWORD`**: `scripts/start_split_tunnel.ps1` и `scripts/watch_split_tunnel.ps1` читают пароль из `.env` или окружения; при его наличии туннель и проверка с ПК идут через **`plink.exe`** (PuTTY). Без пароля — по-прежнему OpenSSH и ключ. Обновлены `.env.example`, `docs/WINDOWS_SSH_TUNNEL.md`.
 - Исправление plink: **`Cannot confirm a host key in batch mode`** — в `start_split_tunnel.ps1` / `watch_split_tunnel.ps1` добавлен **`-hostkey`** с отпечатком `SHA256:…` (переменная **`CASHFLOW_PLINK_HOSTKEY`** при смене ключа на VPS). Удалён несуществующий у plink **`-keepalive`** (из‑за него процесс сразу завершался). Обновлён `docs/WINDOWS_SSH_TUNNEL.md`.
 - **`bot_server.py`:** при запросе к `RECEIVER_URL` — заголовок **`Connection: close`**, `httpx.Limits(max_keepalive_connections=0)`, таймаут connect/read до 15 с, до **8** попыток при `httpx.RequestError` (паузы **2, 4, 8, 16, 32, 64, 128 с**, новый **`nonce`** и подпись), без повтора при `HTTPStatusError`. Ошибка в Telegram — только если все попытки исчерпаны (~4 мин ожидания). См. «Server disconnected…» в `docs/WINDOWS_SSH_TUNNEL.md`.
-- Деплой на VPS `62.60.186.183`: `git push dev master`, затем по SSH `git pull` в `/opt/app/bot-cashflow`, `pip install -r requirements.txt`, `systemctl restart cashflow-bot-server` — сервис `active`.
+- Деплой на VPS `84.22.149.170`: `git push dev master`, затем по SSH `git pull` в `/opt/app/bot-cashflow`, `pip install -r requirements.txt`, `systemctl restart cashflow-bot-server` — сервис `active`.
 
 **Чтобы больше не ловить те же сбои (краткий конспект для агента и человека):**
 
 | Симптом в Telegram | Типичная причина | Что уже зафиксировано в репозитории |
 |--------------------|------------------|-------------------------------------|
-| `All connection attempts failed` | Нет туннеля: на VPS не слушает `127.0.0.1:18080` (упал **ssh/plink**, не запущен **receiver**, порт **8080** мёртв) | Watchdog `watch_split_tunnel` / TaskManager; **plink**: обязательны **`-hostkey`** в `-batch` и **без** ложного **`-keepalive`** (у PuTTY его нет — процесс выходил сразу). |
+| `All connection attempts failed` | Нет туннеля: на VPS не слушает `127.0.0.1:18080` (упал **ssh/plink**, не запущен **receiver**, порт **8080** мёртв). Если с ПК ещё и **`VPS:22` timeout** при живом боте — бан IP/firewall (не долбить `-Force`). | Watchdog `watch_split_tunnel` / guardian; **anti-thrash** при `VpsUnreachable`; **plink** `PingInterval` через сессию `BotCashFlowReverse`; **plink**: **`-hostkey`** в `-batch` и **без** ложного **`-keepalive`**. |
 | `Server disconnected without sending a response` | TCP к приёмнику есть, но HTTP обрывается (нестабильный проброс, **keep-alive** через SSH) | В **`bot_server.py`**: нет переиспользования keep-alive к `RECEIVER_URL`, **повторы** сетевых ошибок с новым **nonce**. После правок **`bot_server.py`** — **деплой на VPS** (`git pull` + `systemctl restart cashflow-bot-server`). |
+| `400 Bad Request` | Туннель/HMAC OK; приёмник отклонил перезапись дня (часто битая сумма: nbsp / невидимые символы) | **`receiver.py`**: `_parse_amount_str`; перезапуск приёмника; [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md) §3a. |
 | Пароль SSH, bridge TaskManager | Нет ключа: **plink** на ПК для туннеля; **paramiko** в `TaskManager` для `obsidian_remote_sync_bridge` | `DEPLOY_SSH_PASSWORD` в `.env`; `paramiko` в `TaskManager/requirements.txt`; не путать с блокировкой **Bot API** (см. `TELEGRAM_BLOCKING_AND_PROXY.md`). |
 
 Детальная шпаргалка: [TROUBLESHOOTING_SPLIT.md](./TROUBLESHOOTING_SPLIT.md).
@@ -227,7 +236,7 @@ LGPL v3.0 — см. `LICENSE` в корне.
 
 ### 2026-04-06
 
-- Развёрнуто на VPS `62.60.186.183`: `/opt/app/bot-cashflow`, systemd `cashflow-bot-server`, `.env` с `RECEIVER_URL=http://127.0.0.1:18080` (обратный SSH с ПК). На Windows: скрипт `scripts/start_split_tunnel.ps1`, автозапуск через `HKCU\...\Run\BotCashFlowSplitTunnel`. Код запушен в GitHub; VPS обновлён `git pull`.
+- Развёрнуто на VPS `84.22.149.170`: `/opt/app/bot-cashflow`, systemd `cashflow-bot-server`, `.env` с `RECEIVER_URL=http://127.0.0.1:18080` (обратный SSH с ПК). На Windows: скрипт `scripts/start_split_tunnel.ps1`, автозапуск через `HKCU\...\Run\BotCashFlowSplitTunnel`. Код запушен в GitHub; VPS обновлён `git pull`.
 - Сгенерирован общий `RECEIVER_SECRET` (RNG), записан в корневой `.env` и в `docs/REAL_DEPLOYMENT_DATA.local.md` (в `.gitignore`); добавлен шаблон `docs/REAL_DEPLOYMENT_DATA.template.md`.
 - Реализована защита канала VPS → ПК: [security.py](../security.py) (HMAC-SHA256, канонический JSON), [receiver.py](../receiver.py) (подпись, nonce anti-replay, окно `event_ts`, привязка к `127.0.0.1` по умолчанию), [bot_server.py](../bot_server.py) (подпись тела, обязательный секрет ≥24 символов). Документация: [RECEIVER_SECURITY.md](./RECEIVER_SECURITY.md); обновлены [deploy/README.md](../deploy/README.md), [.env.example](../.env.example). Тесты: `tests/test_security.py`, `tests/test_receiver_security.py`.
 
@@ -235,6 +244,7 @@ LGPL v3.0 — см. `LICENSE` в корне.
 
 - Колонка **Work** — произвольный текст «вида деятельности» (`Сервер; Hetzner; 1200; Менторство`); `+` по-прежнему woman. Фильтр «Работа» на дашборде — все строки с непустой Work; при фильтре колонка «Деятельность» в таблице. Файлы: `bot.py`, `bot_server.py`, `receiver.py`, тесты, `00 - Dashboard cash flow.md`.
 - Флаг **work** (`; -`): первая итерация — заменена на текстовую Work (см. выше).
+- **Backfill Work** в vault `2025`–`2026`: `scripts/backfill_work_column.py` (`infer_work`, `--dry-run`), `tests/test_backfill_work.py`; применено **76 строк в 69 файлах** (эталон июнь–июль 2026). Домены reg.ru: 1-й по дате → Менторство, 2-й → White box; существующий Work и Woman `+` не тронуты. В `bot.py` — `_parse_amount_str` (nbsp / невидимые символы в суммах при перезаписи таблиц).
 
 ### 2026-04-05
 

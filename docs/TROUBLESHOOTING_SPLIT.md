@@ -34,6 +34,27 @@
 
 **Важно:** после изменений **`bot_server.py`** обязателен **деплой на VPS** (`git pull`, `systemctl restart cashflow-bot-server`), иначе пользователь продолжит видеть старую ошибку.
 
+### 3a. `400 Bad Request` для `http://127.0.0.1:18080/`
+
+**Симптом:** в Telegram «Ошибка связи с ПК: Client error '400 Bad Request'…». Туннель и HMAC **в порядке** (иначе был бы 403 или `All connection attempts failed`): приёмник **отклонил** тело/перезапись дневного `.md`.
+
+**Типичная причина:** в уже существующей строке дня сумма с nbsp / невидимыми символами (например `14\xa0521,5\u202c`) — старый `float(...)` в `build_table` падал → 400 на **любую** новую запись за этот день.
+
+**Исправление:** в **`receiver.py`** (и `bot.py`) — `_parse_amount_str`; после правки перезапустить приёмник (`start_split_tunnel.ps1 -Force`). Смотреть лог receiver: `Некорректное тело запроса: …`.
+
+### 3b. `All connection attempts failed` при живом боте в Telegram
+
+**Симптом:** бот отвечает (значит **VPS и `bot_server` живы**), но пишет `All connection attempts failed` — на VPS нет TCP к `127.0.0.1:18080` (обратный туннель с ПК мёртв).
+
+**Частая причина (2026-09):** с ПК **не открывается TCP на `VPS:22`** (fail2ban / firewall провайдера / бан IP после частых plink). Интернет при этом работает (`8.8.8.8:443` OK), а `84.22.149.170:22` — timeout. Старый guardian при этом каждые 20 с делал `-Force` и **усиливал бан**.
+
+**Что сделано в скриптах:** `Get-SplitTunnelHealth` различает `Healthy` / `VpsUnreachable` / `TunnelBroken`; при `VpsUnreachable` **не** вызывается `-Force` (backoff до 5 мин). У plink keepalive через сессию PuTTY `BotCashFlowReverse` (`PingInterval=30`). Лог: `logs/split_tunnel_guardian.log`.
+
+**Что сделать вручную, если `VpsUnreachable`:**
+1. Панель VPS / `fail2ban-client set sshd unbanip <ваш_IP>` / security group — разрешить SSH с текущего IP.
+2. На ПК: `.\scripts\start_split_tunnel.ps1 -Force`, затем probe 403 с VPS.
+3. Включить задачу **`BotCashFlowTunnelWatch`**, если она Disabled: `schtasks /Change /TN BotCashFlowTunnelWatch /ENABLE`.
+
 ### 4. Диагностика за 30 секунд
 
 | Проверка | Ожидание |

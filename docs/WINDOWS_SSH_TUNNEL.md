@@ -39,7 +39,9 @@ cd D:\Desktop\Projects\Bot_CashFlow_Python
 .\scripts\start_split_tunnel.ps1 -Force
 ```
 
-По умолчанию нужен **SSH-ключ к VPS без пароля** (тот же хост: `root@62.60.186.183`). Если ключа нет: задайте **`DEPLOY_SSH_PASSWORD`** в `.env` этого репозитория (или в переменной окружения) и установите **PuTTY**, чтобы в `PATH` был **`plink.exe`** — скрипт поднимет туннель через plink (штатный `ssh.exe` на Windows не принимает пароль неинтерактивно). В **`-batch`** plink не спросит ключ хоста: в скрипте задаётся **`-hostkey`** с отпечатком `SHA256:…` (формат PuTTY 4.19.3). При смене ключа на сервере задайте **`CASHFLOW_PLINK_HOSTKEY`** в окружении. У **plink нет** опции `-keepalive` как у OpenSSH — она не используется. Тот же пароль можно держать в `TaskManager/.env` для Obsidian bridge — там используется **paramiko** (см. `TaskManager/requirements.txt`).
+По умолчанию нужен **SSH-ключ к VPS без пароля** (тот же хост: `root@84.22.149.170`). Если ключа нет: задайте **`DEPLOY_SSH_PASSWORD`** в `.env` этого репозитория (или в переменной окружения) и установите **PuTTY**, чтобы в `PATH` был **`plink.exe`** — скрипт поднимет туннель через plink (штатный `ssh.exe` на Windows не принимает пароль неинтерактивно). В **`-batch`** plink не спросит ключ хоста: в скрипте задаётся **`-hostkey`** с отпечатком `SHA256:…` (формат PuTTY 4.19.3). При смене ключа на сервере задайте **`CASHFLOW_PLINK_HOSTKEY`** в окружении. У **plink нет** CLI-опции `-keepalive` как у OpenSSH (ложный флаг валил процесс) — вместо этого `start_split_tunnel.ps1` пишет сессию PuTTY **`BotCashFlowReverse`** с **`PingInterval=30`**. Тот же пароль можно держать в `TaskManager/.env` для Obsidian bridge — там используется **paramiko** (см. `TaskManager/requirements.txt`).
+
+Проверка здоровья (`scripts/split_tunnel_health.ps1`): сначала TCP к **`VPS:22`**, затем POST→403 на туннель. Статусы **`Healthy` / `VpsUnreachable` / `TunnelBroken`**. При **`VpsUnreachable`** watchdog/guardian **не** вызывают `-Force` (иначе шквал plink усиливает fail2ban). Лог: `logs/split_tunnel_guardian.log`.
 
 ## Автозапуск и watchdog на Windows
 

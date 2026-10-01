@@ -1,6 +1,6 @@
 # Запуск receiver + обратный SSH-туннель на VPS (порт 18080 -> ПК:8080).
 # По умолчанию: SSH-ключ без пароля. Иначе задайте DEPLOY_SSH_PASSWORD в .env или в окружении
-# и установите PuTTY (plink.exe в PATH) — неинтерактивный пароль для штатного ssh.exe недоступен.
+# и установите PuTTY (plink.exe в PATH) - неинтерактивный пароль для штатного ssh.exe недоступен.
 param(
     # -Force: full restart. Default (ensure): skip if receiver+ssh+tunnel OK (for watchdog).
     [switch]$Force,
@@ -15,7 +15,7 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "split_tunnel_health.ps1")
 
-$SshHost = if ($SshHost) { $SshHost } elseif ($env:CASHFLOW_VPS_SSH_HOST) { $env:CASHFLOW_VPS_SSH_HOST } else { "root@62.60.186.183" }
+$SshHost = if ($SshHost) { $SshHost } elseif ($env:CASHFLOW_VPS_SSH_HOST) { $env:CASHFLOW_VPS_SSH_HOST } else { "root@84.22.149.170" }
 $RemoteForward = if ($RemoteForward) { $RemoteForward } elseif ($env:CASHFLOW_REMOTE_FORWARD) { $env:CASHFLOW_REMOTE_FORWARD } else { "127.0.0.1:18080:127.0.0.1:8080" }
 # plink -batch: host key must be trusted without registry cache (PuTTY «Cannot confirm a host key in batch mode»).
 # Формат: SHA256: + 43 символа (документация PuTTY 4.19.3). Переопределение: $env:CASHFLOW_PLINK_HOSTKEY
@@ -59,6 +59,10 @@ if (-not (Test-Path $Py)) {
     Write-Host "venv not found, using fallback Python: $Py"
 }
 
+$vpsHost = Get-SshTargetHost $SshHost
+$vpsUser = Get-SshTargetUser $SshHost
+$vpsTcpOpen = Test-TcpPortOpen -HostName $vpsHost -Port 22 -TimeoutMs 3000
+
 if (-not $Force) {
     $receiverOk = @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue | Where-Object {
         $_.CommandLine -and $_.CommandLine -match "receiver\.py" -and $_.CommandLine -match [regex]::Escape($Root)
@@ -73,12 +77,20 @@ if (-not $Force) {
         return $false
     })
     if ($receiverOk.Count -ge 1 -and $tunnelOk.Count -ge 1) {
+        if (-not $vpsTcpOpen) {
+            Write-Host "Receiver + tunnel processes exist; VPS ${vpsHost}:22 unreachable from PC - skip restart (anti-thrash). Root: $Root"
+            exit 0
+        }
         if (Test-SplitTunnelHealthy -SshHost $SshHost -RemoteProbeUrl "http://127.0.0.1:18080/" -DeployPw $deployPw -PlinkHostKey $PlinkHostKey -TimeoutSeconds 15) {
             Write-Host "Receiver + SSH already running; VPS probe 403 OK. Root: $Root"
             exit 0
         } else {
             Write-Host "Processes exist but VPS probe is unhealthy - will restart."
         }
+    } elseif (-not $vpsTcpOpen -and $receiverOk.Count -ge 1 -and $tunnelOk.Count -eq 0) {
+        # Есть receiver, нет туннеля, VPS закрыт - не стартуем plink каждые N секунд.
+        Write-Host "VPS ${vpsHost}:22 unreachable; receiver up, tunnel absent - skip plink start (anti-thrash). Root: $Root"
+        exit 0
     }
 }
 
@@ -106,10 +118,17 @@ if ($deployPw) {
     throw "DEPLOY_SSH_PASSWORD is set but plink.exe not found in PATH. Install PuTTY or use an SSH key and remove DEPLOY_SSH_PASSWORD."
   }
   $plinkExe = $plinkCmd.Source
-  # У plink нет опции -keepalive (в отличие от OpenSSH); лишние токены приводили к мгновенному выходу процесса.
-  $plinkArgs = @("-ssh", "-batch", "-hostkey", $PlinkHostKey, "-N", "-R", $RemoteForward, "-pw", $deployPw, $SshHost)
+  # plink has no CLI -keepalive (fake flag killed process). Keepalive via PuTTY session PingInterval.
+  $sessionName = Ensure-PlinkSshKeepalive -SessionName "BotCashFlowReverse" -HostName $vpsHost -UserName $vpsUser -PingIntervalSec 30
+  $plinkArgs = @(
+    "-load", $sessionName,
+    "-ssh", "-batch", "-hostkey", $PlinkHostKey,
+    "-N", "-R", $RemoteForward,
+    "-pw", $deployPw,
+    $SshHost
+  )
   Start-Process -FilePath $plinkExe -ArgumentList $plinkArgs -WindowStyle Hidden
-  Write-Host "Receiver + plink reverse tunnel started. Root: $Root. Host: $SshHost. Forward: $RemoteForward"
+  Write-Host "Receiver + plink reverse tunnel started (session=$sessionName PingInterval=30). Root: $Root. Host: $SshHost. Forward: $RemoteForward"
 } else {
   $sshArgs = @(
     "-N",

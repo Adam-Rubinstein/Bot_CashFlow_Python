@@ -35,7 +35,7 @@
 
 - Поднять на VPS **SOCKS5** (например `microsocks`, `3proxy`, Dante) или **HTTP CONNECT**, открыть порт в firewall, задать логин/пароль.
 - В `.env` на ПК:  
-  `PROXY_URL=socks5://user:pass@62.60.186.183:ПОРТ`  
+  `PROXY_URL=socks5://user:pass@84.22.149.170:ПОРТ`  
   или `http://...` для HTTP-прокси.
 
 **Не путать** с MTProto на `1443`: для `PROXY_URL` нужен отдельный сервис SOCKS5/HTTP.
@@ -52,8 +52,8 @@
 
 | Параметр | Значение |
 |----------|----------|
-| Публичный IPv4 | `62.60.186.183` |
-| SSH | `ssh root@62.60.186.183` |
+| Публичный IPv4 | `84.22.149.170` |
+| SSH | `ssh root@84.22.149.170` |
 | Каталог `bot_server.py` | `/opt/app/bot-cashflow` (см. [deploy/README.md](../deploy/README.md)) |
 
 На этом же сервере может быть запущен **MTProto-прокси** (например порт `1443` и секрет в клиенте) — он полезен для **приложения Telegram**, но **не заменяет** SOCKS5/HTTP для Python-бота и не является `RECEIVER_URL` для split-режима.
@@ -68,7 +68,7 @@ flowchart LR
     R[receiver.py]
     B[bot.py]
   end
-  subgraph vps [VPS 62.60.186.183]
+  subgraph vps [VPS 84.22.149.170]
     S[bot_server.py]
     P[SOCKS5 optional]
   end

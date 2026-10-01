@@ -20,7 +20,7 @@ See [LICENSE](LICENSE) for details.
 ## Документация
 
 - **[docs/MemoryBank.md](docs/MemoryBank.md)** — контекст для разработки и агентов: архитектура, режимы (`bot.py` / `bot_server` + `receiver`), переменные окружения, деплой на VPS, журнал изменений.
-- **[deploy/README.md](deploy/README.md)** — установка и обновление `bot_server.py` на VPS (`62.60.186.183`), systemd `cashflow-bot-server`.
+- **[deploy/README.md](deploy/README.md)** — установка и обновление `bot_server.py` на VPS (`84.22.149.170`), systemd `cashflow-bot-server`.
 - **[docs/TELEGRAM_BLOCKING_AND_PROXY.md](docs/TELEGRAM_BLOCKING_AND_PROXY.md)** — если Telegram / Bot API недоступны с ПК: почему MTProto из приложения не подходит для бота, split-режим (VPS + туннель + `receiver`), SOCKS5/VPN.
 - **[docs/RECEIVER_SECURITY.md](docs/RECEIVER_SECURITY.md)** — безопасность туннеля: HMAC, nonce, HTTPS, секрет, localhost.
 - **[docs/WINDOWS_SSH_TUNNEL.md](docs/WINDOWS_SSH_TUNNEL.md)** — обратный SSH с Windows (`start_split_tunnel.ps1`), автозапуск/watchdog через репозиторий TaskManager, типичные ошибки связи.

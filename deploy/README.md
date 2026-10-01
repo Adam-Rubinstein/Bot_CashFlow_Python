@@ -4,8 +4,8 @@
 
 ## Production VPS
 
-- **IP:** `62.60.186.183`
-- **SSH:** `ssh root@62.60.186.183`
+- **IP:** `84.22.149.170`
+- **SSH:** `ssh root@84.22.149.170`
 - **Код на сервере:** `/opt/app/bot-cashflow`
 - **Сервис:** `cashflow-bot-server`
 - **Перезапуск после правок:** `systemctl restart cashflow-bot-server`
@@ -22,7 +22,7 @@
 1. Подключение:
 
 ```bash
-ssh root@62.60.186.183
+ssh root@84.22.149.170
 ```
 
 2. Установка:
