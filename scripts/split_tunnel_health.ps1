@@ -1,4 +1,4 @@
-function Read-DotEnvKey([string]$LiteralPath, [string]$Key) {
+﻿function Read-DotEnvKey([string]$LiteralPath, [string]$Key) {
     if (-not (Test-Path -LiteralPath $LiteralPath)) { return $null }
     foreach ($line in Get-Content -LiteralPath $LiteralPath) {
         $t = $line.Trim()
@@ -20,6 +20,65 @@ function Read-DotEnvKey([string]$LiteralPath, [string]$Key) {
     return $null
 }
 
+function Get-SshTargetHost([string]$SshHost) {
+    if ([string]::IsNullOrWhiteSpace($SshHost)) { return $SshHost }
+    $at = $SshHost.LastIndexOf("@")
+    if ($at -ge 0 -and $at -lt ($SshHost.Length - 1)) {
+        return $SshHost.Substring($at + 1).Trim()
+    }
+    return $SshHost.Trim()
+}
+
+function Get-SshTargetUser([string]$SshHost) {
+    if ([string]::IsNullOrWhiteSpace($SshHost)) { return "root" }
+    $at = $SshHost.LastIndexOf("@")
+    if ($at -gt 0) { return $SshHost.Substring(0, $at).Trim() }
+    return "root"
+}
+
+function Test-TcpPortOpen(
+    [string]$HostName,
+    [int]$Port = 22,
+    [int]$TimeoutMs = 3000
+) {
+    if ([string]::IsNullOrWhiteSpace($HostName)) { return $false }
+    $client = $null
+    try {
+        $client = New-Object System.Net.Sockets.TcpClient
+        $iar = $client.BeginConnect($HostName, $Port, $null, $null)
+        if (-not $iar.AsyncWaitHandle.WaitOne($TimeoutMs)) {
+            return $false
+        }
+        $client.EndConnect($iar)
+        return $true
+    } catch {
+        return $false
+    } finally {
+        if ($client) { try { $client.Close() } catch {} }
+    }
+}
+
+function Ensure-PlinkSshKeepalive(
+    [string]$SessionName = "BotCashFlowReverse",
+    [string]$HostName,
+    [string]$UserName = "root",
+    [int]$PingIntervalSec = 30
+) {
+    # У plink нет CLI -keepalive; SSH keepalive задаётся в сохранённой сессии PuTTY (PingInterval).
+    if ([string]::IsNullOrWhiteSpace($HostName)) { return $null }
+    $regKey = ($SessionName -replace " ", "%20")
+    $path = "HKCU:\Software\SimonTatham\PuTTY\Sessions\$regKey"
+    if (-not (Test-Path -LiteralPath $path)) {
+        New-Item -Path $path -Force | Out-Null
+    }
+    New-ItemProperty -LiteralPath $path -Name "HostName" -Value $HostName -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $path -Name "UserName" -Value $UserName -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $path -Name "Protocol" -Value "ssh" -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $path -Name "PortNumber" -Value 22 -PropertyType DWord -Force | Out-Null
+    New-ItemProperty -LiteralPath $path -Name "PingInterval" -Value $PingIntervalSec -PropertyType DWord -Force | Out-Null
+    return $SessionName
+}
+
 function Invoke-SplitTunnelProbe(
     [string]$SshHost,
     [string]$RemoteProbeUrl,
@@ -27,7 +86,7 @@ function Invoke-SplitTunnelProbe(
     [string]$PlinkHostKey,
     [int]$TimeoutSeconds = 15
 ) {
-    $remoteCmd = "curl -s -o /dev/null -w '%{http_code}' -X POST $RemoteProbeUrl -H 'Content-Type: application/json' -d '{}' 2>/dev/null"
+    $remoteCmd = "curl -s -o /dev/null -w '%{http_code}' -m 5 -X POST $RemoteProbeUrl -H 'Content-Type: application/json' -d '{}' 2>/dev/null"
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.UseShellExecute = $false
@@ -71,6 +130,39 @@ function Invoke-SplitTunnelProbe(
     }
 }
 
+function Get-SplitTunnelHealth(
+    [string]$SshHost,
+    [string]$RemoteProbeUrl,
+    [string]$DeployPw,
+    [string]$PlinkHostKey,
+    [int]$TimeoutSeconds = 15,
+    [int]$TcpTimeoutMs = 3000
+) {
+    $hostName = Get-SshTargetHost $SshHost
+    if (-not (Test-TcpPortOpen -HostName $hostName -Port 22 -TimeoutMs $TcpTimeoutMs)) {
+        return [pscustomobject]@{
+            Status = "VpsUnreachable"
+            Code = $null
+            Detail = "TCP ${hostName}:22 not open from PC"
+        }
+    }
+    $probe = Invoke-SplitTunnelProbe -SshHost $SshHost -RemoteProbeUrl $RemoteProbeUrl -DeployPw $DeployPw -PlinkHostKey $PlinkHostKey -TimeoutSeconds $TimeoutSeconds
+    if ($null -ne $probe -and $probe.Code -eq "403") {
+        return [pscustomobject]@{
+            Status = "Healthy"
+            Code = "403"
+            Detail = "VPS probe 403 OK"
+        }
+    }
+    $code = if ($null -eq $probe) { $null } else { $probe.Code }
+    $err = if ($null -eq $probe) { "probe timeout/null" } else { $probe.StdErr }
+    return [pscustomobject]@{
+        Status = "TunnelBroken"
+        Code = $code
+        Detail = "VPS:22 up but tunnel probe failed (code=$code; $err)"
+    }
+}
+
 function Test-SplitTunnelHealthy(
     [string]$SshHost,
     [string]$RemoteProbeUrl,
@@ -78,6 +170,17 @@ function Test-SplitTunnelHealthy(
     [string]$PlinkHostKey,
     [int]$TimeoutSeconds = 15
 ) {
-    $probe = Invoke-SplitTunnelProbe -SshHost $SshHost -RemoteProbeUrl $RemoteProbeUrl -DeployPw $DeployPw -PlinkHostKey $PlinkHostKey -TimeoutSeconds $TimeoutSeconds
-    return $null -ne $probe -and $probe.Code -eq "403"
+    $health = Get-SplitTunnelHealth -SshHost $SshHost -RemoteProbeUrl $RemoteProbeUrl -DeployPw $DeployPw -PlinkHostKey $PlinkHostKey -TimeoutSeconds $TimeoutSeconds
+    return $health.Status -eq "Healthy"
+}
+
+function Write-SplitTunnelLog([string]$Root, [string]$Message) {
+    try {
+        $dir = Join-Path $Root "logs"
+        if (-not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+        $line = "{0:yyyy-MM-dd HH:mm:ss} {1}" -f (Get-Date), $Message
+        Add-Content -LiteralPath (Join-Path $dir "split_tunnel_guardian.log") -Value $line -Encoding UTF8
+    } catch {}
 }

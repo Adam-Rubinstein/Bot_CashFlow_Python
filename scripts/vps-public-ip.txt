@@ -1,0 +1,7 @@
+﻿# VPS services public IP вЂ” single source of truth for adam-mentor.ru
+# VPN (may differ): scripts/vps-vpn-public-ip.txt
+# Python: from vps_ip import public_ip, nip_host, tm_webhook_url
+# PowerShell: . scripts/Get-AdamVpsPublicIp.ps1 ; Get-AdamVpsPublicIp
+# Cutover: python scripts/migrate-vps-public-ip.py --new X.X.X.X
+138.124.26.43
+

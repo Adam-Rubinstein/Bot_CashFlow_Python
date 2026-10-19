@@ -1,10 +1,11 @@
-# Deploy bot_server.py to VPS and restart cashflow-bot-server.
+﻿# Deploy bot_server.py to VPS and restart cashflow-bot-server.
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'Get-VpsPublicIp.ps1')
 
 . (Join-Path $PSScriptRoot "split_tunnel_health.ps1")
 
 $Root = Split-Path -Parent $PSScriptRoot
-$SshHost = if ($env:CASHFLOW_VPS_SSH_HOST) { $env:CASHFLOW_VPS_SSH_HOST } else { "root@84.22.149.170" }
+$SshHost = if ($env:CASHFLOW_VPS_SSH_HOST) { $env:CASHFLOW_VPS_SSH_HOST } else { (Get-VpsSshHost) }
 $PlinkHostKey = if ($env:CASHFLOW_PLINK_HOSTKEY) { $env:CASHFLOW_PLINK_HOSTKEY.Trim() } else { "SHA256:Bbpqi7aeMnjf4F+s4JpOlv/NoitFwXITg2ybMBJSpEY" }
 
 $deployPw = $null
@@ -35,3 +36,4 @@ $remoteCmd = "systemctl restart cashflow-bot-server && systemctl is-active cashf
 if ($LASTEXITCODE -ne 0) { throw "plink failed with exit code $LASTEXITCODE" }
 
 Write-Host "Deploy OK: bot_server.py updated, cashflow-bot-server active."
+

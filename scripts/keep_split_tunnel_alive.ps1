@@ -1,7 +1,7 @@
-param(
-    # Как часто перепроверять туннель в постоянном режиме (при Healthy).
+﻿param(
+    # РљР°Рє С‡Р°СЃС‚Рѕ РїРµСЂРµРїСЂРѕРІРµСЂСЏС‚СЊ С‚СѓРЅРЅРµР»СЊ РІ РїРѕСЃС‚РѕСЏРЅРЅРѕРј СЂРµР¶РёРјРµ (РїСЂРё Healthy).
     [int]$CheckIntervalSeconds = 20,
-    # Максимальная пауза при VpsUnreachable (чтобы не долбить fail2ban/firewall).
+    # РњР°РєСЃРёРјР°Р»СЊРЅР°СЏ РїР°СѓР·Р° РїСЂРё VpsUnreachable (С‡С‚РѕР±С‹ РЅРµ РґРѕР»Р±РёС‚СЊ fail2ban/firewall).
     [int]$MaxUnreachableBackoffSeconds = 300
 )
 
@@ -15,7 +15,7 @@ if (-not (Test-Path $StarterScript)) {
     throw "start_split_tunnel.ps1 not found. Set CASHFLOW_PROJECT_ROOT or restore the repo path."
 }
 
-$SshHost = if ($env:CASHFLOW_VPS_SSH_HOST) { $env:CASHFLOW_VPS_SSH_HOST } else { "root@84.22.149.170" }
+$SshHost = if ($env:CASHFLOW_VPS_SSH_HOST) { $env:CASHFLOW_VPS_SSH_HOST } else { (Get-VpsSshHost) }
 $RemoteProbeUrl = if ($env:CASHFLOW_REMOTE_PROBE_URL) { $env:CASHFLOW_REMOTE_PROBE_URL } else { "http://127.0.0.1:18080/" }
 $PlinkHostKey = if ($env:CASHFLOW_PLINK_HOSTKEY) { $env:CASHFLOW_PLINK_HOSTKEY.Trim() } else { "SHA256:Bbpqi7aeMnjf4F+s4JpOlv/NoitFwXITg2ybMBJSpEY" }
 
@@ -26,7 +26,7 @@ $unreachableBackoff = $CheckIntervalSeconds
 try {
     $mutex = New-Object System.Threading.Mutex($true, $mutexName, [ref]$createdNew)
     if (-not $createdNew) {
-        # Уже есть один guardian в этой Windows-сессии.
+        # РЈР¶Рµ РµСЃС‚СЊ РѕРґРёРЅ guardian РІ СЌС‚РѕР№ Windows-СЃРµСЃСЃРёРё.
         return
     }
 
@@ -49,21 +49,21 @@ try {
             if ($health.Status -eq "Healthy") {
                 $unreachableBackoff = $CheckIntervalSeconds
             } elseif ($health.Status -eq "VpsUnreachable") {
-                # Не делать -Force: новые plink к закрытому :22 усугубляют fail2ban/бан IP.
-                # Ensure без Force поднимет только локальный receiver при необходимости.
+                # РќРµ РґРµР»Р°С‚СЊ -Force: РЅРѕРІС‹Рµ plink Рє Р·Р°РєСЂС‹С‚РѕРјСѓ :22 СѓСЃСѓРіСѓР±Р»СЏСЋС‚ fail2ban/Р±Р°РЅ IP.
+                # Ensure Р±РµР· Force РїРѕРґРЅРёРјРµС‚ С‚РѕР»СЊРєРѕ Р»РѕРєР°Р»СЊРЅС‹Р№ receiver РїСЂРё РЅРµРѕР±С…РѕРґРёРјРѕСЃС‚Рё.
                 & $StarterScript
                 $sleepSec = $unreachableBackoff
                 $unreachableBackoff = [Math]::Min($unreachableBackoff * 2, $MaxUnreachableBackoffSeconds)
                 Write-Host "VPS SSH unreachable - skip Force, backoff ${sleepSec}s. $($health.Detail)"
             } else {
-                # TunnelBroken: VPS:22 доступен, но reverse tunnel/receiver не отвечает 403.
+                # TunnelBroken: VPS:22 РґРѕСЃС‚СѓРїРµРЅ, РЅРѕ reverse tunnel/receiver РЅРµ РѕС‚РІРµС‡Р°РµС‚ 403.
                 & $StarterScript -Force
                 $unreachableBackoff = $CheckIntervalSeconds
                 Write-Host "Tunnel broken - Force restart. $($health.Detail)"
             }
         } catch {
             Write-SplitTunnelLog $Root ("exception: {0}" -f $_.Exception.Message)
-            # Неожиданная ошибка: Force только если VPS хотя бы пингуется по TCP:22.
+            # РќРµРѕР¶РёРґР°РЅРЅР°СЏ РѕС€РёР±РєР°: Force С‚РѕР»СЊРєРѕ РµСЃР»Рё VPS С…РѕС‚СЏ Р±С‹ РїРёРЅРіСѓРµС‚СЃСЏ РїРѕ TCP:22.
             $hostName = Get-SshTargetHost $SshHost
             if (Test-TcpPortOpen -HostName $hostName -Port 22 -TimeoutMs 3000) {
                 & $StarterScript -Force
@@ -82,3 +82,4 @@ finally {
         $mutex.Dispose()
     }
 }
+

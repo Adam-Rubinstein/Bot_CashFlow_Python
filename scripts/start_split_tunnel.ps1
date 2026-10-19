@@ -1,24 +1,25 @@
-# Запуск receiver + обратный SSH-туннель на VPS (порт 18080 -> ПК:8080).
-# По умолчанию: SSH-ключ без пароля. Иначе задайте DEPLOY_SSH_PASSWORD в .env или в окружении
-# и установите PuTTY (plink.exe в PATH) - неинтерактивный пароль для штатного ssh.exe недоступен.
+﻿# Р—Р°РїСѓСЃРє receiver + РѕР±СЂР°С‚РЅС‹Р№ SSH-С‚СѓРЅРЅРµР»СЊ РЅР° VPS (РїРѕСЂС‚ 18080 -> РџРљ:8080).
+# РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ: SSH-РєР»СЋС‡ Р±РµР· РїР°СЂРѕР»СЏ. РРЅР°С‡Рµ Р·Р°РґР°Р№С‚Рµ DEPLOY_SSH_PASSWORD РІ .env РёР»Рё РІ РѕРєСЂСѓР¶РµРЅРёРё
+# Рё СѓСЃС‚Р°РЅРѕРІРёС‚Рµ PuTTY (plink.exe РІ PATH) - РЅРµРёРЅС‚РµСЂР°РєС‚РёРІРЅС‹Р№ РїР°СЂРѕР»СЊ РґР»СЏ С€С‚Р°С‚РЅРѕРіРѕ ssh.exe РЅРµРґРѕСЃС‚СѓРїРµРЅ.
 param(
     # -Force: full restart. Default (ensure): skip if receiver+ssh+tunnel OK (for watchdog).
     [switch]$Force,
-    # Опционально: root@host или alias из ~/.ssh/config (например bot-prod-vps)
+    # РћРїС†РёРѕРЅР°Р»СЊРЅРѕ: root@host РёР»Рё alias РёР· ~/.ssh/config (РЅР°РїСЂРёРјРµСЂ bot-prod-vps)
     [string]$SshHost = "",
-    # Опционально: корень проекта Bot_CashFlow_Python
+    # РћРїС†РёРѕРЅР°Р»СЊРЅРѕ: РєРѕСЂРµРЅСЊ РїСЂРѕРµРєС‚Р° Bot_CashFlow_Python
     [string]$ProjectRoot = "",
-    # Опционально: формат ssh -R (remote:local), по умолчанию 127.0.0.1:18080:127.0.0.1:8080
+    # РћРїС†РёРѕРЅР°Р»СЊРЅРѕ: С„РѕСЂРјР°С‚ ssh -R (remote:local), РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ 127.0.0.1:18080:127.0.0.1:8080
     [string]$RemoteForward = ""
 )
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'Get-VpsPublicIp.ps1')
 
 . (Join-Path $PSScriptRoot "split_tunnel_health.ps1")
 
-$SshHost = if ($SshHost) { $SshHost } elseif ($env:CASHFLOW_VPS_SSH_HOST) { $env:CASHFLOW_VPS_SSH_HOST } else { "root@84.22.149.170" }
+$SshHost = if ($SshHost) { $SshHost } elseif ($env:CASHFLOW_VPS_SSH_HOST) { $env:CASHFLOW_VPS_SSH_HOST } else { (Get-VpsSshHost) }
 $RemoteForward = if ($RemoteForward) { $RemoteForward } elseif ($env:CASHFLOW_REMOTE_FORWARD) { $env:CASHFLOW_REMOTE_FORWARD } else { "127.0.0.1:18080:127.0.0.1:8080" }
-# plink -batch: host key must be trusted without registry cache (PuTTY «Cannot confirm a host key in batch mode»).
-# Формат: SHA256: + 43 символа (документация PuTTY 4.19.3). Переопределение: $env:CASHFLOW_PLINK_HOSTKEY
+# plink -batch: host key must be trusted without registry cache (PuTTY В«Cannot confirm a host key in batch modeВ»).
+# Р¤РѕСЂРјР°С‚: SHA256: + 43 СЃРёРјРІРѕР»Р° (РґРѕРєСѓРјРµРЅС‚Р°С†РёСЏ PuTTY 4.19.3). РџРµСЂРµРѕРїСЂРµРґРµР»РµРЅРёРµ: $env:CASHFLOW_PLINK_HOSTKEY
 $PlinkHostKey = if ($env:CASHFLOW_PLINK_HOSTKEY) { $env:CASHFLOW_PLINK_HOSTKEY.Trim() } else { "SHA256:Bbpqi7aeMnjf4F+s4JpOlv/NoitFwXITg2ybMBJSpEY" }
 
 $Root = if ($ProjectRoot) { $ProjectRoot } elseif ($env:CASHFLOW_PROJECT_ROOT) { $env:CASHFLOW_PROJECT_ROOT } else { (Split-Path -Parent $PSScriptRoot) }
@@ -54,7 +55,7 @@ if (-not (Test-Path $Py)) {
             "C:\Program Files\Python313\python.exe"
         )
         $found = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-        if ($found) { $Py = $found } else { throw "Нет venv и не найден Python: $Root\.venv\Scripts\python.exe" }
+        if ($found) { $Py = $found } else { throw "РќРµС‚ venv Рё РЅРµ РЅР°Р№РґРµРЅ Python: $Root\.venv\Scripts\python.exe" }
     }
     Write-Host "venv not found, using fallback Python: $Py"
 }
@@ -88,13 +89,13 @@ if (-not $Force) {
             Write-Host "Processes exist but VPS probe is unhealthy - will restart."
         }
     } elseif (-not $vpsTcpOpen -and $receiverOk.Count -ge 1 -and $tunnelOk.Count -eq 0) {
-        # Есть receiver, нет туннеля, VPS закрыт - не стартуем plink каждые N секунд.
+        # Р•СЃС‚СЊ receiver, РЅРµС‚ С‚СѓРЅРЅРµР»СЏ, VPS Р·Р°РєСЂС‹С‚ - РЅРµ СЃС‚Р°СЂС‚СѓРµРј plink РєР°Р¶РґС‹Рµ N СЃРµРєСѓРЅРґ.
         Write-Host "VPS ${vpsHost}:22 unreachable; receiver up, tunnel absent - skip plink start (anti-thrash). Root: $Root"
         exit 0
     }
 }
 
-# Остановить старые экземпляры (тот же порт / тот же туннель)
+# РћСЃС‚Р°РЅРѕРІРёС‚СЊ СЃС‚Р°СЂС‹Рµ СЌРєР·РµРјРїР»СЏСЂС‹ (С‚РѕС‚ Р¶Рµ РїРѕСЂС‚ / С‚РѕС‚ Р¶Рµ С‚СѓРЅРЅРµР»СЊ)
 Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue | ForEach-Object {
   $cmd = $_.CommandLine
   if ($cmd -and $cmd -match "receiver\.py" -and $cmd -match [regex]::Escape($Root)) {
@@ -141,3 +142,4 @@ if ($deployPw) {
   Start-Process -FilePath "ssh" -ArgumentList $sshArgs -WindowStyle Hidden
   Write-Host "Receiver + SSH reverse tunnel started (no ssh window). Root: $Root. Host: $SshHost. Forward: $RemoteForward"
 }
+
