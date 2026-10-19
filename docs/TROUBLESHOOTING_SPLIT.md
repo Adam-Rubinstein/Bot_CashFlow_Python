@@ -46,7 +46,7 @@
 
 **Симптом:** бот отвечает (значит **VPS и `bot_server` живы**), но пишет `All connection attempts failed` — на VPS нет TCP к `127.0.0.1:18080` (обратный туннель с ПК мёртв).
 
-**Частая причина (2026-09):** с ПК **не открывается TCP на `VPS:22`** (fail2ban / firewall провайдера / бан IP после частых plink). Интернет при этом работает (`8.8.8.8:443` OK), а `84.22.149.170:22` — timeout. Старый guardian при этом каждые 20 с делал `-Force` и **усиливал бан**.
+**Частая причина (2026-09):** с ПК **не открывается TCP на `VPS:22`** (fail2ban / firewall провайдера / бан IP после частых plink). Интернет при этом работает (`8.8.8.8:443` OK), а `{vps_ip.public_ip()}:22` — timeout. Старый guardian при этом каждые 20 с делал `-Force` и **усиливал бан**.
 
 **Что сделано в скриптах:** `Get-SplitTunnelHealth` различает `Healthy` / `VpsUnreachable` / `TunnelBroken`; при `VpsUnreachable` **не** вызывается `-Force` (backoff до 5 мин). У plink keepalive через сессию PuTTY `BotCashFlowReverse` (`PingInterval=30`). Лог: `logs/split_tunnel_guardian.log`.
 

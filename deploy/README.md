@@ -4,8 +4,8 @@
 
 ## Production VPS
 
-- **IP:** `84.22.149.170`
-- **SSH:** `ssh root@84.22.149.170`
+- **IP:** только `scripts/vps-public-ip.txt` / `vps_ip.public_ip()` (не дублировать)
+- **SSH:** `vps_ip.deploy_ssh_host()` → `ssh root@$(python -c "import sys; sys.path.insert(0,'scripts'); from vps_ip import public_ip; print(public_ip())")`
 - **Код на сервере:** `/opt/app/bot-cashflow`
 - **Сервис:** `cashflow-bot-server`
 - **Перезапуск после правок:** `systemctl restart cashflow-bot-server`
@@ -22,7 +22,7 @@
 1. Подключение:
 
 ```bash
-ssh root@84.22.149.170
+ssh root@$(python -c "import sys; sys.path.insert(0,'scripts'); from vps_ip import public_ip; print(public_ip())")
 ```
 
 2. Установка:
