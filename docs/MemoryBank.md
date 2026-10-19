@@ -41,7 +41,7 @@ Telegram-бот для учёта **расходов и доходов**: пол
 
 Если **локально** не доходит до `api.telegram.org`, а файлы нужны **на ПК**: используйте split-режим (**`bot_server.py` на VPS** + **`receiver.py` на ПК** + туннель bore/ngrok), либо **SOCKS5/HTTP** на VPS в `PROXY_URL`, либо VPN на ПК. Подробно: [TELEGRAM_BLOCKING_AND_PROXY.md](./TELEGRAM_BLOCKING_AND_PROXY.md).
 
-**VPS:** IPv4 `84.22.149.170`, SSH `ssh root@84.22.149.170`. Установка и systemd для `bot_server.py`: [deploy/README.md](../deploy/README.md). MTProto-прокси на сервере (например порт `1443`) работает для **клиента Telegram**, не для `python-telegram-bot`.
+**VPS:** IPv4 из `scripts/vps-public-ip.txt` / `vps_ip.public_ip()`, SSH через `vps_ip.deploy_ssh_host()`. Установка и systemd для `bot_server.py`: [deploy/README.md](../deploy/README.md). MTProto-прокси на сервере (например порт `1443`) работает для **клиента Telegram**, не для `python-telegram-bot`.
 
 ### B. VPS + туннель + ПК: `bot_server.py` + `receiver.py`
 
@@ -108,8 +108,8 @@ Telegram-бот для учёта **расходов и доходов**: пол
 
 | Параметр | Значение |
 |----------|----------|
-| **IPv4** | `84.22.149.170` |
-| **Вход по SSH** | `ssh root@84.22.149.170` |
+| **IPv4** | `scripts/vps-public-ip.txt` / `vps_ip.public_ip()` |
+| **Вход по SSH** | `vps_ip.deploy_ssh_host()` |
 | **Пользователь systemd в примерах** | `root` |
 
 ### Пути на сервере
